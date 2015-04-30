@@ -167,15 +167,16 @@ class SimpleRouter(app_manager.RyuApp):
             print(srcMac)
             print('ruta[0]: ', int(IPAddress(ruta[0])))
             print('ruta[1]: ', int(IPAddress(ruta[1])))
-            print('srcIP: ', int(IPAddress(srcIp)))
-            #print('srcMac: ', int(IPAddress(srcMac)))  # No se puede a partir de MAC
-            if int(IPAddress(ruta[0])) == (int(IPAddress(srcIp)) & int(IPAddress(ruta[1]))):
+            print('srcIP: ', int(IPAddress(dstIp)))
+            if int(IPAddress(ruta[0])) == int(IPAddress(dstIp)): #Esto tendría sentido para mí, lo otro no.
+                #if int(IPAddress(ruta[0])) == (int(IPAddress(dstIp)) & int(IPAddress(ruta[1]))):
                 print('La dirección se encuentra en la tabla')
                 if IPNetwork(ruta[0],ruta[1]).prefixlen > rutaFinal.prefixlen:
                     rutaFinal = IPNetwork(ruta[0],ruta[1])
                     print('Se encuentra la ruta final ')
                     print(rutaFinal)
                     modificado=True
+                    #Habría que pensar también que se haría en el caso de que hubiese un gateway.. es decir, pasarle el gateway en la dirección de destino supongo
         if(modificado==True):
         	self.send_icmp(datapath, dstMac, dstIp, srcMac, srcIp, inPort, seq, data, id, 0, ttl)
         else:
