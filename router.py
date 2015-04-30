@@ -161,6 +161,8 @@ class SimpleRouter(app_manager.RyuApp):
             if int(IPAddress(ruta[0])) == (int(IPAddress(dstIp)) & int(IPAddress(ruta[1]))):
                 if IPNetwork(ruta[0],ruta[1]).prefixlen > rutaFinal.prefixlen:
                     rutaFinal = IPNetwork(ruta[0],ruta[1])
+                    print('Se encuentra la ruta final ')
+                    print(rutaFinal)
                     modificado=True
         if(modificado==True):
         	self.send_icmp(datapath, dstMac, dstIp, srcMac, srcIp, inPort, seq, data, id, 0, ttl)
