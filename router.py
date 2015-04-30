@@ -158,7 +158,7 @@ class SimpleRouter(app_manager.RyuApp):
         modificado = False
         rutaFinal = IPNetwork('0.0.0.0/0')
         print('Tabla enrutamiento: ')
-        print(tablaEnrutamiento)
+        print(self.tablaEnrutamiento)
         for ruta in self.tablaEnrutamiento:
             print('RUTA:')
             print(ruta)
