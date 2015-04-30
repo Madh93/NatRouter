@@ -164,6 +164,9 @@ class SimpleRouter(app_manager.RyuApp):
             print(ruta)
             print('DESTINO:')
             print(srcIp)
+            print('ruta[0]: %d', int(IPAddress(ruta[0])))
+            print('ruta[1]: %d', int(IPAddress(ruta[1])))
+            print('srcIP: %d', (int(IPAddress(srcIp)))
             if int(IPAddress(ruta[0])) == (int(IPAddress(srcIp)) & int(IPAddress(ruta[1]))):
                 print('La dirección se encuentra en la tabla')
                 if IPNetwork(ruta[0],ruta[1]).prefixlen > rutaFinal.prefixlen:
