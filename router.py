@@ -157,8 +157,13 @@ class SimpleRouter(app_manager.RyuApp):
         #Comprobar
         modificado = False
         rutaFinal = IPNetwork('0.0.0.0/0')
+        print('Tabla enrutamiento: ')
+        print(tablaEnrutamiento)
         for ruta in self.tablaEnrutamiento:
+            print('RUTA:')
+            print(ruta)
             if int(IPAddress(ruta[0])) == (int(IPAddress(dstIp)) & int(IPAddress(ruta[1]))):
+                print('La dirección se encuentra en la tabla')
                 if IPNetwork(ruta[0],ruta[1]).prefixlen > rutaFinal.prefixlen:
                     rutaFinal = IPNetwork(ruta[0],ruta[1])
                     print('Se encuentra la ruta final ')
