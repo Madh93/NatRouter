@@ -34,19 +34,19 @@ class SimpleRouter(app_manager.RyuApp):
         self.routingInfo = {}
         self.mplsInfo = {}
         
-        self.ports_to_ips = [('10.0.0.0','255.255.255.0','00:00:00:00:00:50'),
-        ('192.168.1.0','255.255.255.0','00:00:00:00:00:60'),
-        ('192.168.2.0','255.255.255.0','00:00:00:00:00:70'),
-        ('192.168.3.0','255.255.255.0','00:00:00:00:00:80')]
+        self.ports_to_ips = [('10.0.0.8','255.255.255.0','00:00:00:00:00:50'),
+        ('192.168.1.1','255.255.255.0','00:00:00:00:00:60'),
+        ('192.168.2.1','255.255.255.0','00:00:00:00:00:70'),
+        ('192.168.3.1','255.255.255.0','00:00:00:00:00:80')]
 
-        self.tablaEnrutamiento = [('10.0.0.1','255.255.255.0',1,None),
-        ('10.0.0.2','255.255.255.0',2,None),
-        ('10.0.0.3','255.255.255.0',3,None),
-        ('10.0.0.4','255.255.255.0',4,None)]
+        self.tablaEnrutamiento = [('10.0.0.0','255.255.255.0',1,None),
+        ('192.168.1.0','255.255.255.0',2,None),
+        ('192.168.2.0','255.255.255.0',3,None),
+        ('192.168.3.0','255.255.255.0',4,None)]
 
     @set_ev_cls(ofp_event.EventOFPPacketIn, MAIN_DISPATCHER)
     def packet_in_handler(self, ev): #Qué hace el router cuando le llegua un paquete
-        print('ENTRO EN LA RUTINA 2')
+        print('ENTRO EN LA RUTINA')
         msg = ev.msg 
         datapath = msg.datapath
         ofproto = datapath.ofproto
