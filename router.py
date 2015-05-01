@@ -46,7 +46,7 @@ class SimpleRouter(app_manager.RyuApp):
 
     @set_ev_cls(ofp_event.EventOFPPacketIn, MAIN_DISPATCHER)
     def packet_in_handler(self, ev): #Qué hace el router cuando le llegua un paquete
-        print('ENTRO EN LA RUTINA')
+        print('ENTRO EN LA RUTINA 2')
         msg = ev.msg 
         datapath = msg.datapath
         ofproto = datapath.ofproto
