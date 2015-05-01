@@ -182,7 +182,7 @@ class SimpleRouter(app_manager.RyuApp):
         else:
         	print('No se ha enviado nada')
 
-    def send_icmp(self, datapath, srcMac, srcIp, outPort, seq, data, id=1, type=8, ttl=64):
+    def send_icmp(self, datapath, srcMac, srcIp, dstMac, dstIp, outPort, seq, data, id=1, type=8, ttl=64):
         print('Entra a enviar el paquete')
         e = ethernet(dstMac, srcMac, ether.ETH_TYPE_IP) #Construye el protocolo ethernet
         iph = ipv4(4, 5, 0, 0, 0, 2, 0, ttl, 1, 0, srcIp, dstIp) #Construye la parte del protocolo IP
