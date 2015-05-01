@@ -184,7 +184,7 @@ class SimpleRouter(app_manager.RyuApp):
 
     def send_icmp(self, datapath, srcMac, srcIp, dstMac, dstIp, outPort, seq, data, id=1, type=8, ttl=64):
         print('Entra a enviar el paquete')
-        e = ethernet(dstMac, srcMac, ether.ETH_TYPE_IP) #Construye el protocolo ethernet
+        e = ethernet.ethernet(dstMac, srcMac, ether.ETH_TYPE_IP) #Construye el protocolo ethernet
         iph = ipv4(4, 5, 0, 0, 0, 2, 0, ttl, 1, 0, srcIp, dstIp) #Construye la parte del protocolo IP
         echo = icmp.echo(id, seq, data) #Construye la parte del echo que se añadirá al protocolo icmp
         icmph = icmp.icmp(type, 0, 0, echo) #Construye la parte del icmp
