@@ -59,11 +59,13 @@ class SimpleRouter(app_manager.RyuApp):
 
         src=eth.src
         dst=eth.dst
-
+        print(1)
         if eth.ethertype==ether.ETH_TYPE_ARP: #Si se trata de un paquete ARPÇ
+            print(2)
             arp_msg= packet.get_protocol(arp.arp)
             #print('Mostrar unos cuantos')
             if (arp_msg.dst_ip == self.ports_to_ips[in_port-1][0] and arp_msg.opcode==arp.ARP_REQUEST): #
+                print(3)
                 print('Entro en el segundo')
                 e = ethernet.ethernet(dst=src, src=self.ports_to_ips[in_port-1][2], ethertype=ether.ETH_TYPE_ARP)
                 a = arp.arp(opcode=arp.ARP_REPLY, src_mac=self.ports_to_ips[in_port-1][2], src_ip=arp_msg.dst_ip, dst_mac=src, dst_ip=arp_msg.src_ip)
@@ -73,6 +75,7 @@ class SimpleRouter(app_manager.RyuApp):
                 self.send_packet(datapath, in_port,p)
         elif eth.ethertype==ether.ETH_TYPE_IP: #Si se trata de un paquete IP
             #print('paquete ip')
+            print(4)
             self.receive_ip(datapath, packet, ethertype, in_port)
 
 
@@ -185,7 +188,7 @@ class SimpleRouter(app_manager.RyuApp):
     def send_icmp(self, datapath, srcMac, srcIp, dstMac, dstIp, outPort, seq, data, id=1, type=8, ttl=64):
         print('Entra a enviar el paquete')
         e = ethernet.ethernet(dstMac, srcMac, ether.ETH_TYPE_IP) #Construye el protocolo ethernet
-        iph = ipv4(4, 5, 0, 0, 0, 2, 0, ttl, 1, 0, srcIp, dstIp) #Construye la parte del protocolo IP
+        iph = ipv4.ipv4(4, 5, 0, 0, 0, 2, 0, ttl, 1, 0, srcIp, dstIp) #Construye la parte del protocolo IP
         echo = icmp.echo(id, seq, data) #Construye la parte del echo que se añadirá al protocolo icmp
         icmph = icmp.icmp(type, 0, 0, echo) #Construye la parte del icmp
 
