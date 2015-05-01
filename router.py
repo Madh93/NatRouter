@@ -34,10 +34,10 @@ class SimpleRouter(app_manager.RyuApp):
         self.routingInfo = {}
         self.mplsInfo = {}
         
-        self.ports_to_ips = [('10.0.0.8','255.255.255.0','00:00:00:00:00:50'),
-        ('192.168.1.1','255.255.255.0','00:00:00:00:00:60'),
-        ('192.168.2.1','255.255.255.0','00:00:00:00:00:70'),
-        ('192.168.3.1','255.255.255.0','00:00:00:00:00:80')]
+        self.ports_to_ips = [('10.0.0.0','255.255.255.0','00:00:00:00:00:50'),
+        ('192.168.1.0','255.255.255.0','00:00:00:00:00:60'),
+        ('192.168.2.0','255.255.255.0','00:00:00:00:00:70'),
+        ('192.168.3.0','255.255.255.0','00:00:00:00:00:80')]
 
         self.tablaEnrutamiento = [('10.0.0.1','255.255.255.0',1,None),
         ('10.0.0.2','255.255.255.0',2,None),
@@ -168,8 +168,8 @@ class SimpleRouter(app_manager.RyuApp):
             print('ruta[0]: ', int(IPAddress(ruta[0])))
             print('ruta[1]: ', int(IPAddress(ruta[1])))
             print('srcIP: ', int(IPAddress(dstIp)))
-            if int(IPAddress(ruta[0])) == int(IPAddress(dstIp)): #Esto tendría sentido para mí, lo otro no.
-                #if int(IPAddress(ruta[0])) == (int(IPAddress(dstIp)) & int(IPAddress(ruta[1]))):
+            #if int(IPAddress(ruta[0])) == int(IPAddress(dstIp)): #Esto tendría sentido para mí, lo otro no.
+            if int(IPAddress(ruta[0])) == (int(IPAddress(dstIp)) & int(IPAddress(ruta[1]))):
                 print('La dirección se encuentra en la tabla')
                 if IPNetwork(ruta[0],ruta[1]).prefixlen > rutaFinal.prefixlen:
                     rutaFinal = IPNetwork(ruta[0],ruta[1])
