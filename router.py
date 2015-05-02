@@ -25,7 +25,7 @@ from ryu.lib.packet.packet import Packet
 
 class SimpleRouter(app_manager.RyuApp):
     OFP_VERSIONS = [ofproto_v1_3.OFP_VERSION]
-    mac_to_port=dict()
+    # mac_to_port=dict()
     def __init__(self, *args, **kwargs):
         super(SimpleRouter, self).__init__(*args, **kwargs)
         self.ping_q = hub.Queue()
@@ -33,6 +33,8 @@ class SimpleRouter(app_manager.RyuApp):
         self.arpInfo = {}
         self.routingInfo = {}
         self.mplsInfo = {}
+
+        self.mac_to_port=dict()
         
         self.ports_to_ips = [('10.0.0.8','255.255.255.0','00:00:00:00:00:50'),
         ('10.0.0.9','255.255.255.0','00:00:00:00:00:60'),
@@ -146,10 +148,10 @@ class SimpleRouter(app_manager.RyuApp):
                             src_ip=arp_msg.src_ip, 
                             dst_mac=etherFrame.dst, 
                             dst_ip=arp_msg.dst_ip)
-                if dst in self.mac_to_port.keys():
+                if arp_msg.dst_ip in self.mac_to_port.keys():
                     puerto = self.mac_to_port[dst]
                 else:
-                    puerto = ofproto.OFPP_FLOOD
+                    puerto = datapath.ofproto.OFPP_FLOOD
 
             p = Packet()
             p.add_protocol(e)
