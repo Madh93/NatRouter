@@ -44,6 +44,17 @@ class SimpleRouter(app_manager.RyuApp):
         ('192.168.2.0','255.255.255.0',3,None),
         ('192.168.3.0','255.255.255.0',4,None)]
 
+    # Devuelve la red correspondiente (IPNetwork(ipaddres/mask))
+    def find_in_routingTable (self, dstIp):
+        founds = []
+        for ruta in self.tablaEnrutamiento:
+            if IPAddress(ruta[0]) == IPAddress(dstIp) & IPAddress(ruta[1]):
+                founds.append(IPNetwork(ruta[0]+"/"+ruta[1]))
+        if founds:
+            return max(founds)
+        else:
+            return None
+
     @set_ev_cls(ofp_event.EventOFPPacketIn, MAIN_DISPATCHER)
     def packet_in_handler(self, ev): #Qué hace el router cuando le llegua un paquete
         print('ENTRO EN LA RUTINA')
@@ -160,6 +171,7 @@ class SimpleRouter(app_manager.RyuApp):
     #Función que se encarga de enviar una réplica de icmp
     def reply_icmp(self, datapath, srcMac, dstMac, srcIp, dstIp, ttl, type, id, seq, data, inPort):
         #Comprobar
+        '''
         modificado = False
         rutaFinal = IPNetwork('0.0.0.0/0')
         print('Tabla enrutamiento: ')
@@ -186,6 +198,12 @@ class SimpleRouter(app_manager.RyuApp):
         	self.send_icmp(datapath, dstMac, dstIp, srcMac, srcIp, inPort, seq, data, id, 0, ttl)
         else:
         	print('No se ha enviado nada')
+        '''
+        if find_in_routingTable(dstIp):
+            self.send_icmp(datapath, dstMac, dstIp, srcMac, srcIp, inPort, seq, data, id, 0, ttl)
+        else:
+            print('No se ha enviado nada')
+
 
     def send_icmp(self, datapath, srcMac, srcIp, dstMac, dstIp, outPort, seq, data, id=1, type=8, ttl=64):
         print('Entra a enviar el paquete')
@@ -206,4 +224,6 @@ class SimpleRouter(app_manager.RyuApp):
         print('PAQUETE: ')
         print(out)
         datapath.send_msg(out) #Enviar mensaje
+
+
 
