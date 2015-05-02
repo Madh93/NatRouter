@@ -160,7 +160,6 @@ class SimpleRouter(app_manager.RyuApp):
                 print('dst_mac = ',etherFrame.dst) 
                 print('dst_ip = ',arp_msg.dst_ip)
                 a = arp.arp(opcode=arp.ARP_REQUEST, 
-                            src_mac=arp_msg.src_mac, 
                             src_ip=arp_msg.src_ip, 
                             dst_mac=etherFrame.dst, 
                             dst_ip=arp_msg.dst_ip)
