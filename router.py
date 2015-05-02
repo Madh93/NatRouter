@@ -155,6 +155,10 @@ class SimpleRouter(app_manager.RyuApp):
                 e = ethernet.ethernet(dst=etherFrame.dst, 
                                         src=etherFrame.src, 
                                         ethertype=ether.ETH_TYPE_ARP)
+                print('src_mac = ',arp_msg.src_mac)
+                print('src_ip = ',arp_msg.src_ip)
+                print('dst_mac = ',etherFrame.dst) 
+                print('dst_ip = ',arp_msg.dst_ip)
                 a = arp.arp(opcode=arp.ARP_REQUEST, 
                             src_mac=arp_msg.src_mac, 
                             src_ip=arp_msg.src_ip, 
