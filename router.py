@@ -35,9 +35,9 @@ class SimpleRouter(app_manager.RyuApp):
         self.mplsInfo = {}
         
         self.ports_to_ips = [('10.0.0.8','255.255.255.0','00:00:00:00:00:50'),
-        ('192.168.1.1','255.255.255.0','00:00:00:00:00:60'),
-        ('192.168.2.1','255.255.255.0','00:00:00:00:00:70'),
-        ('192.168.3.1','255.255.255.0','00:00:00:00:00:80')]
+        ('10.0.0.9','255.255.255.0','00:00:00:00:00:60'),
+        ('10.0.0.10','255.255.255.0','00:00:00:00:00:70'),
+        ('10.0.0.11','255.255.255.0','00:00:00:00:00:80')]
 
         self.tablaEnrutamiento = [('10.0.0.0','255.255.255.0',1,None),
         ('192.168.1.0','255.255.255.0',2,None),
@@ -88,6 +88,12 @@ class SimpleRouter(app_manager.RyuApp):
                 print('Es un ARP_REPLY')
             elif (arp_msg.dst_ip != self.ports_to_ips[in_port-1][0] and arp_msg.opcode == arp.ARP_REQUEST):
                 print('Es un ARP_REQUEST a otro PC')
+                e = ethernet.ethernet(dst=dst , src=src, ethertype=ether.ETH_TYPE_ARP)
+                a = arp.arp(opcode=arp.ARP_REQUEST, src_mac=arp_msg.src_mac, src_ip=arp_msg.src_ip, dst_mac=dst, dst_ip=arp_msg.dst_ip)
+                p = Packet()
+                p.add_protocol(e)
+                p.add_protocol(a)
+                self.send_packet(datapath, in_port, p)
         elif eth.ethertype==ether.ETH_TYPE_IP: #Si se trata de un paquete IP
             #print('paquete ip')
             print(4)
