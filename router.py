@@ -25,7 +25,7 @@ from ryu.lib.packet.packet import Packet
 
 class SimpleRouter(app_manager.RyuApp):
     OFP_VERSIONS = [ofproto_v1_3.OFP_VERSION]
-    #mac_to_port=dict()
+    mac_to_port=dict()
     def __init__(self, *args, **kwargs):
         super(SimpleRouter, self).__init__(*args, **kwargs)
         self.ping_q = hub.Queue()
@@ -69,6 +69,8 @@ class SimpleRouter(app_manager.RyuApp):
 
         src=eth.src
         dst=eth.dst
+
+        self.mac_to_port[src] = in_port
         print(1)
 
         if eth.ethertype==ether.ETH_TYPE_ARP: #Si se trata de un paquete ARPÇ
@@ -127,6 +129,7 @@ class SimpleRouter(app_manager.RyuApp):
                             src_ip=arp_msg.dst_ip, 
                             dst_mac=etherFrame.src, 
                             dst_ip=arp_msg.src_ip)
+                puerto=inPort
             else:
                 print('Es un ARP_REQUEST a otro PC') 
                 print('dst = ',etherFrame.dst)
@@ -143,11 +146,15 @@ class SimpleRouter(app_manager.RyuApp):
                             src_ip=arp_msg.src_ip, 
                             dst_mac=etherFrame.dst, 
                             dst_ip=arp_msg.dst_ip)
+                if dst in self.mac_to_port.keys():
+                    puerto = self.mac_to_port[dst]
+                else:
+                    puerto = ofproto.OFPP_FLOOD
 
             p = Packet()
             p.add_protocol(e)
             p.add_protocol(a)
-            self.send_packet(datapath, inPort, p)
+            self.send_packet(datapath, puerto, p)
             print('Se envió el paquete')
 
         elif arp_msg.opcode == arp.ARP_REPLY:
