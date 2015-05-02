@@ -152,6 +152,9 @@ class SimpleRouter(app_manager.RyuApp):
                             dst_ip=arp_msg.src_ip)
             else:
                 print('Es un ARP_REQUEST a otro PC') 
+                print('dst = ',etherFrame.dst)
+                print('src = ',etherFrame.src)
+                print('ethertype = ',ether.ETH_TYPE_ARP)
                 e = ethernet.ethernet(dst=etherFrame.dst, 
                                         src=etherFrame.src, 
                                         ethertype=ether.ETH_TYPE_ARP)
