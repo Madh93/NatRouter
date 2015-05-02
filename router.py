@@ -94,6 +94,7 @@ class SimpleRouter(app_manager.RyuApp):
                 p.add_protocol(e)
                 p.add_protocol(a)
                 self.send_packet(datapath, in_port, p)
+                print('Sen envió el paquete')
         elif eth.ethertype==ether.ETH_TYPE_IP: #Si se trata de un paquete IP
             #print('paquete ip')
             print(4)
