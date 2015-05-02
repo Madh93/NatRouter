@@ -154,8 +154,8 @@ class SimpleRouter(app_manager.RyuApp):
         except:
             data = ''
         if icmpPacket.type == 0: #Echo reply. Mensaje generado como respuesta a un mensaje Echo request. Cuando alguien hace ping desde aquí y se recibe la respuesta
-            icmp_lenght = ipPacket.total_lenght -20
-            buf = ("%d bytes from %s: icmp_req=%d ttl=%d data=[%s]" % (icmp_lenght, srcIp, seq, ttl, data))
+            icmp_length = ipPacket.total_length -20
+            buf = ("%d bytes from %s: icmp_req=%d ttl=%d data=[%s]" % (icmp_length, srcIp, seq, ttl, data))
             self.ping_q.put(buf)
         elif icmpPacket.type == 3: #Destination Unreachable. 
             buf = "ping (Destination Unreachable )"
