@@ -84,8 +84,10 @@ class SimpleRouter(app_manager.RyuApp):
                 p.add_protocol(e)
                 p.add_protocol(a)
                 self.send_packet(datapath, in_port,p)
-            if (arp_msg.opcode == arp.ARP_REPLY):
+            elif (arp_msg.opcode == arp.ARP_REPLY):
                 print('Es un ARP_REPLY')
+            elif (arp_msg.dst_ip != self.ports_to_ips[in_port-1][0] and arp_msg.opcode == arp.ARP_REQUEST):
+                print('Es un ARP_REQUEST a otro PC')
         elif eth.ethertype==ether.ETH_TYPE_IP: #Si se trata de un paquete IP
             #print('paquete ip')
             print(4)
