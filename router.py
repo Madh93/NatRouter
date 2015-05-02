@@ -67,37 +67,14 @@ class SimpleRouter(app_manager.RyuApp):
         eth = packet.get_protocol(ethernet.ethernet)
         ethertype = packet.get_protocol(ethernet.ethernet)
 
-
         src=eth.src
         dst=eth.dst
         print(1)
+
         if eth.ethertype==ether.ETH_TYPE_ARP: #Si se trata de un paquete ARPÇ
             print(2)
             self.receive_arp(datapath, packet, ethertype, in_port)
-            '''
-            arp_msg= packet.get_protocol(arp.arp)
-            #print('Mostrar unos cuantos')
-            if (arp_msg.dst_ip == self.ports_to_ips[in_port-1][0] and arp_msg.opcode==arp.ARP_REQUEST): #
-                print(3)
-                print('Entro en el segundo')
-                e = ethernet.ethernet(dst=src, src=self.ports_to_ips[in_port-1][2], ethertype=ether.ETH_TYPE_ARP)
-                a = arp.arp(opcode=arp.ARP_REPLY, src_mac=self.ports_to_ips[in_port-1][2], src_ip=arp_msg.dst_ip, dst_mac=src, dst_ip=arp_msg.src_ip)
-                p = Packet()
-                p.add_protocol(e)
-                p.add_protocol(a)
-                self.send_packet(datapath, in_port,p)
-            elif (arp_msg.opcode == arp.ARP_REPLY):
-                print('Es un ARP_REPLY')
-            elif (arp_msg.dst_ip != self.ports_to_ips[in_port-1][0] and arp_msg.opcode == arp.ARP_REQUEST):
-                print('Es un ARP_REQUEST a otro PC')
-                e = ethernet.ethernet(dst=dst , src=src, ethertype=ether.ETH_TYPE_ARP)
-                a = arp.arp(opcode=arp.ARP_REQUEST, src_mac=arp_msg.src_mac, src_ip=arp_msg.src_ip, dst_mac=dst, dst_ip=arp_msg.dst_ip)
-                p = Packet()
-                p.add_protocol(e)
-                p.add_protocol(a)
-                self.send_packet(datapath, in_port, p)
-                print('Sen envió el paquete')
-            '''
+
         elif eth.ethertype==ether.ETH_TYPE_IP: #Si se trata de un paquete IP
             #print('paquete ip')
             print(4)
@@ -224,35 +201,7 @@ class SimpleRouter(app_manager.RyuApp):
             self.ping_q.put(buf)
     #Función que se encarga de enviar una réplica de icmp
     def reply_icmp(self, datapath, srcMac, dstMac, srcIp, dstIp, ttl, type, id, seq, data, inPort):
-        #Comprobar
-        '''
-        modificado = False
-        rutaFinal = IPNetwork('0.0.0.0/0')
-        print('Tabla enrutamiento: ')
-        print(self.tablaEnrutamiento)
-        for ruta in self.tablaEnrutamiento:
-            print('RUTA:')
-            print(ruta)
-            print('DESTINO:')
-            print(srcIp)
-            print(srcMac)
-            print('ruta[0]: ', int(IPAddress(ruta[0])))
-            print('ruta[1]: ', int(IPAddress(ruta[1])))
-            print('srcIP: ', int(IPAddress(dstIp)))
-            #if int(IPAddress(ruta[0])) == int(IPAddress(dstIp)): #Esto tendría sentido para mí, lo otro no.
-            if int(IPAddress(ruta[0])) == (int(IPAddress(dstIp)) & int(IPAddress(ruta[1]))):
-                print('La dirección se encuentra en la tabla')
-                if IPNetwork(ruta[0],ruta[1]).prefixlen > rutaFinal.prefixlen:
-                    rutaFinal = IPNetwork(ruta[0],ruta[1])
-                    print('Se encuentra la ruta final ')
-                    print(rutaFinal)
-                    modificado=True
-                    #Habría que pensar también que se haría en el caso de que hubiese un gateway.. es decir, pasarle el gateway en la dirección de destino supongo
-        if(modificado==True):
-        	self.send_icmp(datapath, dstMac, dstIp, srcMac, srcIp, inPort, seq, data, id, 0, ttl)
-        else:
-        	print('No se ha enviado nada')
-        '''
+
         if self.find_in_routingTable(dstIp):
             self.send_icmp(datapath, dstMac, dstIp, srcMac, srcIp, inPort, seq, data, id, 0, ttl)
         else:
