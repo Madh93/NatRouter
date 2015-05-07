@@ -35,6 +35,8 @@ class SimpleRouter(app_manager.RyuApp):
         self.mplsInfo = {}
 
         self.mac_to_port=dict()
+
+        self.ipToMac = dict()
         
         self.ports_to_ips = [('10.0.0.8','255.255.255.0','00:00:00:00:00:50'),
         ('10.0.0.9','255.255.255.0','00:00:00:00:00:60'),
@@ -141,8 +143,7 @@ class SimpleRouter(app_manager.RyuApp):
                 print('Se envió el paquete')
             
             else:
-                print "Aviso: ARP_REQUEST para otro!"
-                # print('Es un ARP_REQUEST a otro PC') 
+                print('Es un ARP_REQUEST a otro PC') 
                 # print('dst = ',etherFrame.dst)
                 # print('src = ',etherFrame.src)
                 # print('ethertype = ',ether.ETH_TYPE_ARP)
@@ -161,9 +162,11 @@ class SimpleRouter(app_manager.RyuApp):
                 #     puerto = self.mac_to_port[arp_msg.dst_mac]
                 # else:
                 #     puerto = datapath.ofproto.OFPP_FLOOD
-
         
-        # elif arp_msg.opcode == arp.ARP_REPLY:
+        elif arp_msg.opcode == arp.ARP_REPLY:
+
+            print "Esto es un Reply!"
+            ipToMac[arp_msg.src_ip] = arp_msg.src_mac
         #     print('Es un ARP_REPLY')
         #     print arp_msg.src_mac
         #     if arp_msg.dst_ip == self.ports_to_ips[inPort-1][0]:
@@ -196,13 +199,39 @@ class SimpleRouter(app_manager.RyuApp):
         #print('Hola')
         ipPacket = packet.get_protocol(ipv4.ipv4)
         #print('Fracaso')
-        if ipPacket.proto == inet.IPPROTO_ICMP:
-            icmpPacket = packet.get_protocol(icmp.icmp)
-            self.check_icmp(datapath, etherFrame, ipPacket, icmpPacket, inPort) #Se usa una función que trata un paquete ICMP 
-            return 0
+        if ipPacket.dst_ip == self.ports_to_ips[0][0]:
+            if ipPacket.proto == inet.IPPROTO_ICMP:
+                icmpPacket = packet.get_protocol(icmp.icmp)
+                self.check_icmp(datapath, etherFrame, ipPacket, icmpPacket, inPort) #Se usa una función que trata un paquete ICMP 
+                return 0
+            else:
+                send_packet(datapath=datapath,port=inPort,packet=packet) #Se envía el paquete
+                return 1
         else:
-            send_packet(datapath=datapath,port=inPort,packet=packet) #Se envía el paquete
-            return 1
+
+            print "receive_ip"
+            if ipPacket.dst_ip in ipToMac.keys():
+
+                match = datapath.ofproto_parser.OFPMatch(eth_dst=ipPacket.dst_ip)
+                actions = [datapath.ofproto_parser.OFPActionOutput(ofproto.OFPP_FLOOD)]
+
+                add_flow(datapath, 0, match, actions)
+            else:
+                #hacer arp
+                arp_msg = packet.get_protocol(arp.arp)
+
+                e = ethernet.ethernet(dst=etherFrame.dst, 
+                                        src=etherFrame.src, 
+                                        ethertype=ether.ETH_TYPE_ARP)
+                a = arp.arp(opcode=arp.ARP_REQUEST,
+                            src_ip=arp_msg.src_ip,
+                            dst_mac=etherFrame.dst,
+                            dst_ip=arp_msg.dst_ip)
+                puerto = self.mac_to_port[arp_msg.dst_mac]
+                p = Packet()
+                p.add_protocol(e)
+                p.add_protocol(a)
+
     #Función que se encarga de averiguar si se da respuesta al ping y que mensajes se muestran en el router según el tipo
     def check_icmp(self, datapath, etherFrame, ipPacket, icmpPacket, inPort):
         srcMac = etherFrame.src #Dirección MAC de origen
