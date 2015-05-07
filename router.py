@@ -46,7 +46,7 @@ class SimpleRouter(app_manager.RyuApp):
         self.tablaEnrutamiento = [('10.0.0.0','255.255.255.0',1,None),
         ('10.0.1.0','255.255.255.0',2,None),
         ('10.0.2.0','255.255.255.0',3,None),
-        ('10.0.0.0','255.255.255.0',3,None),
+        ('10.0.0.0','255.255.255.0',3,None)]
 
     # Devuelve la red correspondiente (IPNetwork(ipaddres/mask))
     def find_in_routingTable (self, dstIp):
@@ -125,6 +125,7 @@ class SimpleRouter(app_manager.RyuApp):
         arp_msg = packet.get_protocol(arp.arp)
 
         if arp_msg.opcode == arp.ARP_REQUEST:
+            # print arp_msg.dst_mac
             if arp_msg.dst_ip == self.ports_to_ips[inPort-1][0]:
                 print('Es un ARP_REQUEST al mismo PC')
                 e = ethernet.ethernet(dst=etherFrame.src, 
@@ -144,29 +145,13 @@ class SimpleRouter(app_manager.RyuApp):
             
             else:
                 print('Es un ARP_REQUEST a otro PC') 
-                # print('dst = ',etherFrame.dst)
-                # print('src = ',etherFrame.src)
-                # print('ethertype = ',ether.ETH_TYPE_ARP)
-                # e = ethernet.ethernet(dst=etherFrame.dst, 
-                #                         src=etherFrame.src, 
-                #                         ethertype=ether.ETH_TYPE_ARP)
-                # print('src_mac = ',arp_msg.src_mac)
-                # print('src_ip = ',arp_msg.src_ip)
-                # print('dst_mac = ',etherFrame.dst) 
-                # print('dst_ip = ',arp_msg.dst_ip)
-                # a = arp.arp(opcode=arp.ARP_REQUEST,
-                #             src_ip=arp_msg.src_ip,
-                #             dst_mac=etherFrame.dst,
-                #             dst_ip=arp_msg.dst_ip)
-                # if arp_msg.dst_mac in self.mac_to_port.keys():
-                #     puerto = self.mac_to_port[arp_msg.dst_mac]
-                # else:
-                #     puerto = datapath.ofproto.OFPP_FLOOD
         
         elif arp_msg.opcode == arp.ARP_REPLY:
 
             print "Esto es un Reply!"
             ipToMac[arp_msg.src_ip] = arp_msg.src_mac
+
+
         #     print('Es un ARP_REPLY')
         #     print arp_msg.src_mac
         #     if arp_msg.dst_ip == self.ports_to_ips[inPort-1][0]:
@@ -199,7 +184,8 @@ class SimpleRouter(app_manager.RyuApp):
         #print('Hola')
         ipPacket = packet.get_protocol(ipv4.ipv4)
         #print('Fracaso')
-        if ipPacket.dst_ip == self.ports_to_ips[0][0]:
+        print packet.get_protocol(ipv4.ipv4)
+        if ipPacket.dst == self.ports_to_ips[0][0]:
             if ipPacket.proto == inet.IPPROTO_ICMP:
                 icmpPacket = packet.get_protocol(icmp.icmp)
                 self.check_icmp(datapath, etherFrame, ipPacket, icmpPacket, inPort) #Se usa una función que trata un paquete ICMP 
@@ -210,7 +196,7 @@ class SimpleRouter(app_manager.RyuApp):
         else:
 
             print "receive_ip"
-            if ipPacket.dst_ip in ipToMac.keys():
+            if ipPacket.dst in self.ipToMac.keys():
 
                 match = datapath.ofproto_parser.OFPMatch(eth_dst=ipPacket.dst_ip)
                 actions = [datapath.ofproto_parser.OFPActionOutput(ofproto.OFPP_FLOOD)]
