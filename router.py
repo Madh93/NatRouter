@@ -72,6 +72,7 @@ class SimpleRouter(app_manager.RyuApp):
         src=eth.src
         dst=eth.dst
 
+        #sdgsa
         self.mac_to_port[src] = in_port
         print(1)
 
@@ -144,12 +145,12 @@ class SimpleRouter(app_manager.RyuApp):
                 print('src_ip = ',arp_msg.src_ip)
                 print('dst_mac = ',etherFrame.dst) 
                 print('dst_ip = ',arp_msg.dst_ip)
-                a = arp.arp(opcode=arp.ARP_REQUEST, 
-                            src_ip=arp_msg.src_ip, 
-                            dst_mac=etherFrame.dst, 
+                a = arp.arp(opcode=arp.ARP_REQUEST,
+                            src_ip=arp_msg.src_ip,
+                            dst_mac=etherFrame.dst,
                             dst_ip=arp_msg.dst_ip)
-                if arp_msg.dst_ip in self.mac_to_port.keys():
-                    puerto = self.mac_to_port[dst]
+                if arp_msg.dst_mac in self.mac_to_port.keys():
+                    puerto = self.mac_to_port[arp_msg.dst_mac]
                 else:
                     puerto = datapath.ofproto.OFPP_FLOOD
 
@@ -158,10 +159,25 @@ class SimpleRouter(app_manager.RyuApp):
             p.add_protocol(a)
             self.send_packet(datapath, puerto, p)
             print('Se envió el paquete')
-
+        '''
         elif arp_msg.opcode == arp.ARP_REPLY:
-            print('Es un ARP_REPLY')        
-
+            print('Es un ARP_REPLY')
+            if arp_msg.dst_ip == self.ports_to_ips[inPort-1][0]:
+                #Es para el router
+            else:
+                #Es para otro sitio
+                if arp_msg.dst_mac in self.mac_to_port.keys():
+                    e = ethernet.ethernet(dst=etherFrame.dst, 
+                                            src=etherFrame.src, 
+                                            ethertype=ether.ETH_TYPE_ARP)
+                    a = arp.arp(opcode=arp.ARP_REPLY, 
+                                src_mac=etherFrame.src, 
+                                src_ip=arp_msg.src_ip, 
+                                dst_mac=etherFrame.dst, 
+                                dst_ip=arp_msg.dst_ip)
+                    
+            #No debería haber un else porque si llega un REPLY es que ya está dentro de mac_to_ports  
+        '''
     def receive_ip(self, datapath, packet, etherFrame, inPort): #Función que se usa cuando se recibe un paquete IP
         #print('Hola')
         ipPacket = packet.get_protocol(ipv4.ipv4)
