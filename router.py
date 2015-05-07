@@ -70,6 +70,7 @@ class SimpleRouter(app_manager.RyuApp):
         ethertype = packet.get_protocol(ethernet.ethernet)
 
         src=eth.src
+        print(src)
         dst=eth.dst
 
         #sdgsa
@@ -159,25 +160,33 @@ class SimpleRouter(app_manager.RyuApp):
             p.add_protocol(a)
             self.send_packet(datapath, puerto, p)
             print('Se envió el paquete')
-        '''
+        
         elif arp_msg.opcode == arp.ARP_REPLY:
             print('Es un ARP_REPLY')
+            print arp_msg.src_mac
             if arp_msg.dst_ip == self.ports_to_ips[inPort-1][0]:
+                print('hola')
                 #Es para el router
             else:
                 #Es para otro sitio
+                print arp_msg.dst_mac
                 if arp_msg.dst_mac in self.mac_to_port.keys():
+                    print('glajghfkjgsfssgak')
                     e = ethernet.ethernet(dst=etherFrame.dst, 
                                             src=etherFrame.src, 
                                             ethertype=ether.ETH_TYPE_ARP)
                     a = arp.arp(opcode=arp.ARP_REPLY, 
-                                src_mac=etherFrame.src, 
+                                src_mac=arp_msg.src_mac, 
                                 src_ip=arp_msg.src_ip, 
-                                dst_mac=etherFrame.dst, 
+                                dst_mac=arp_msg.dst_mac, 
                                 dst_ip=arp_msg.dst_ip)
-                    
+                    puerto = self.mac_to_port[arp_msg.dst_mac]
+                    p = Packet()
+                    p.add_protocol(e)
+                    p.add_protocol(a)
+                    self.send_packet(datapath, puerto, p)
             #No debería haber un else porque si llega un REPLY es que ya está dentro de mac_to_ports  
-        '''
+        
     def receive_ip(self, datapath, packet, etherFrame, inPort): #Función que se usa cuando se recibe un paquete IP
         #print('Hola')
         ipPacket = packet.get_protocol(ipv4.ipv4)
