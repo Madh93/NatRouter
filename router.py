@@ -182,7 +182,7 @@ class SimpleRouter(app_manager.RyuApp):
         
     def receive_ip(self, datapath, packet, etherFrame, inPort): #Función que se usa cuando se recibe un paquete IP
         #print('Hola')
-        ipPacket = packet.get_protocol(ipv4.ipv4)
+         ipPacket = packet.get_protocol(ipv4.ipv4)
         #print('Fracaso')
         print packet.get_protocol(ipv4.ipv4)
         if ipPacket.dst == self.ports_to_ips[0][0]:
@@ -205,6 +205,7 @@ class SimpleRouter(app_manager.RyuApp):
             else:
                 #hacer arp
                 arp_msg = packet.get_protocol(arp.arp)
+                print arp_msg
 
                 e = ethernet.ethernet(dst=etherFrame.dst, 
                                         src=etherFrame.src, 
