@@ -39,14 +39,14 @@ class SimpleRouter(app_manager.RyuApp):
         self.ipToMac = dict()
         
         self.ports_to_ips = [('10.0.0.8','255.255.255.0','00:00:00:00:00:50'),
-        ('10.0.1.1','255.255.255.0','00:00:00:00:00:60'),
-        ('10.0.2.1','255.255.255.0','00:00:00:00:00:70'),
-        ('10.0.3.1','255.255.255.0','00:00:00:00:00:80')]
+                             ('10.0.1.1','255.255.255.0','00:00:00:00:00:60'),
+                             ('10.0.2.1','255.255.255.0','00:00:00:00:00:70'),
+                             ('10.0.3.1','255.255.255.0','00:00:00:00:00:80')]
 
         self.tablaEnrutamiento = [('10.0.0.0','255.255.255.0',1,None),
-        ('10.0.1.0','255.255.255.0',2,None),
-        ('10.0.2.0','255.255.255.0',3,None),
-        ('10.0.3.0','255.255.255.0',4,None)]
+                                  ('10.0.1.0','255.255.255.0',2,None),
+                                  ('10.0.2.0','255.255.255.0',3,None),
+                                  ('10.0.3.0','255.255.255.0',4,None)]
 
         self.dict_pendientes = dict()
 
@@ -103,7 +103,7 @@ class SimpleRouter(app_manager.RyuApp):
             else:
                 mod = parser.OFPFlowMod(datapath=datapath, priority=priority,
                     match=match, instructions=inst, idle_timeout=30,command=ofproto.OFPFC_ADD)
-            #print(mod)
+            print "MOD: ", mod 
             datapath.send_msg(mod)
             
     # Enviar un paquete construido en el controlador
@@ -124,17 +124,19 @@ class SimpleRouter(app_manager.RyuApp):
 
     def insertar_flujo(self, msg, mac, port):
         datapath = msg.datapath
-        packet = packet.Packet(msg.data)
-        ipPacket = packet.get_protocol(ipv4.ipv4)
+        pckt = packet.Packet(msg.data)
+        ipPacket = pckt.get_protocol(ipv4.ipv4)
+        eth = pckt.get_protocol(ethernet.ethernet)
+        print "DEST: ", ipPacket
 
-        match = datapath.ofproto_parser.OFPMatch(eth_dst=ipPacket.dst_ip, eth_type=eth.ETH_TYPE_IP)
+        match = datapath.ofproto_parser.OFPMatch(eth_dst=eth.dst, eth_type=ether.ETH_TYPE_IP)
         actions = [
-            datapath.ofproto_parser.OFPActionSetField(eth_src=self.port_to_ips[port-1][0]),
+            datapath.ofproto_parser.OFPActionSetField(eth_src=self.ports_to_ips[port-1][2]),
             datapath.ofproto_parser.OFPActionSetField(eth_dst=mac),
             datapath.ofproto_parser.OFPActionOutput(port)
             ]
 
-        add_flow(datapath=datapath, priority=0, match=match, actions=actions, buffer_id=msg.buffer_id)
+        self.add_flow(datapath=datapath, priority=0, match=match, actions=actions, buffer_id=msg.buffer_id)
     # Procesar si se trata de una respuesta o una peticion ARP
     def receive_arp(self, datapath, packet, etherFrame, inPort):
         print "LLEGÓ UN PAQUETE ARP"
@@ -169,14 +171,15 @@ class SimpleRouter(app_manager.RyuApp):
         elif arp_msg.opcode == arp.ARP_REPLY:
             print "ES UN ARP_REPLY!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!"
             #print "Esto es un Reply!"
-            ipToMac[arp_msg.src_ip] = arp_msg.src_mac
-            for (msg,port) in dict_pendientes[arp_msg.src_ip]:
+            self.ipToMac[arp_msg.src_ip] = arp_msg.src_mac
+            for (msg,port) in self.dict_pendientes[arp_msg.src_ip]:
                 self.insertar_flujo(msg, arp_msg.src_mac, port)
             self.dict_pendientes[arp_msg.src_ip] = []
  
         
     def receive_ip(self, datapath, packet, etherFrame, inPort, msg): #Función que se usa cuando se recibe un paquete IP
         ipPacket = packet.get_protocol(ipv4.ipv4)
+
         #print packet.get_protocol(ipv4.ipv4)
         print "LLEGÓ UN PAQUETE IP"
         if ipPacket.dst == self.ports_to_ips[0][0]: #Si va destinado al router
@@ -196,18 +199,20 @@ class SimpleRouter(app_manager.RyuApp):
             print "¿Está dentro de la tabla ", next_hop, " ?"
             if next_hop in self.ipToMac.keys(): #Si está dentro de la tabla de ips y macs se envía.
                 print "ESTÁ DENTRO DE LA TABLA##################################################"
-                match = datapath.ofproto_parser.OFPMatch(eth_dst=ipPacket.dst_ip) 
+                print "ipToMac[next_hop] = ", self.ipToMac[next_hop]
+                match = datapath.ofproto_parser.OFPMatch(eth_dst=self.ipToMac[next_hop]) 
                 actions = [datapath.ofproto_parser.OFPActionOutput(port)]
 
-                add_flow(datapath, 0, match, actions)
+                self.add_flow(datapath, 0, match, actions)
                 self.insertar_flujo(msg, self.ipToMac[next_hop], port)
             else: #Si no está dentro de la tabla se construye un paquete ARP para averiguar su MAC
                 print "NO ESTÁ DENTRO DE LA TABLA"
-                e = ethernet.ethernet(dst=etherFrame.src, 
+                print "---- NEXT_HOP -----", next_hop
+                e = ethernet.ethernet(#dst=etherFrame.dst, 
                                         src=etherFrame.dst, ethertype=ether.ETH_TYPE_ARP)
                 a = arp.arp(opcode=arp.ARP_REQUEST,
-                            src_ip=ipPacket.src,
-                            dst_mac=etherFrame.dst,
+                            src_ip=self.ports_to_ips[port-1][0],
+                            src_mac=etherFrame.src,
                             dst_ip=next_hop)
                 puerto = etherFrame.src
                 p = Packet()
