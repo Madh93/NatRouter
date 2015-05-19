@@ -14,6 +14,10 @@ Debido a estas tres causas no podemos acabar esta maldición.
 **Iniciar Mininet**
 
     $ sudo mn --topo single,4 --mac --controller remote --switch ovsk,protocols=OpenFlow13 -x
+
+**Cargar configuración**
+
+    $ source router4.conf   
     
 **Iniciar Ryu**
 
