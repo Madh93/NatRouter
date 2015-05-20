@@ -2,12 +2,15 @@
 #coding=utf-8
 
 '''Código que implementa el servicio de PAT'''
+import random
+
 from ryu.lib.packet import packet
 from ryu.lib.packet import ethernet
 from ryu.lib.packet import arp
 from ryu.lib.packet import ipv4
 from ryu.lib.packet import icmp
 from ryu.lib.packet import tcp
+from ryu.lib.packet import udp
 from ryu.lib.packet import packet_utils
 from ryu.lib.packet.packet import Packet
 from ryu.controller.handler import set_ev_cls
@@ -24,6 +27,7 @@ from ryu.ofproto import inet
 from netaddr.ip import IPNetwork
 from netaddr.ip import IPAddress
 
+ip_publica = '10.0.0.69'
 
 class SimpleRouter(app_manager.RyuApp):
     OFP_VERSIONS = [ofproto_v1_3.OFP_VERSION]
@@ -46,7 +50,8 @@ class SimpleRouter(app_manager.RyuApp):
         self.tablaEnrutamiento = [('10.0.0.0','255.255.255.0',1,None),
                                   ('10.0.1.0','255.255.255.0',2,None)]
 
-        self.tablaNat = []                          
+        #[ip_privada(src), puerto_privado(src_port), ip_publica(dst), puerto_publico(dst_port)]
+        self.tablaNat = []
 
         self.dict_pendientes = dict()
 
@@ -59,7 +64,7 @@ class SimpleRouter(app_manager.RyuApp):
                     ruta_sel[0] = IPNetwork(ruta[0],ruta[1])    #Network
                     ruta_sel[1] = ruta[2]                       #Puerto
                     ruta_sel[2] = ruta[3]                       #Gateway
-                    print "ruta sel: ", ruta_sel
+                    # print "ruta sel: ", ruta_sel
         if ruta_sel[2] == None:
             return (dstIp, ruta_sel[1])
         else:
@@ -73,13 +78,14 @@ class SimpleRouter(app_manager.RyuApp):
         in_port = msg.match['in_port']
         
 
-        packet = Packet (msg.data)
+        packet = Packet(msg.data)
         eth = packet.get_protocol(ethernet.ethernet)
         ethertype = packet.get_protocol(ethernet.ethernet)
         src=eth.src
         dst=eth.dst
 
         self.mac_to_port[src] = in_port
+        used_ports = []
 
 
 
@@ -87,9 +93,87 @@ class SimpleRouter(app_manager.RyuApp):
             self.receive_arp(datapath, packet, ethertype, in_port)
 
         elif eth.ethertype==ether.ETH_TYPE_IP: #Si se trata de un paquete IP
-            #Aquí dentro se hace un if para comprobar si es tcp o udp
-            tcp_port = packet.get_protocol(tcp.tcp)
-            print "MENSAJE", tcp_port.ethertype
+            try: #Intenta almacenar un paquete del tipo TCPs
+                tcp_port = packet.get_protocol(tcp.tcp)
+            except:
+                pass
+            if tcp_port:
+                print "PAQUETE AL LLEGAR: ", packet
+                #ALMACENAR LA INFORMACIÓN EN LA TABLA:
+                esta_en_tabla = False
+                fila = None
+
+                for em in self.tablaNat: #Busca en la tabla 
+                    if tcp_port.dst_port == em[3]:
+                        esta_en_tabla = True
+                        fila = em
+
+                if esta_en_tabla == False: #Si no está en la tabla
+                    #Se añade a la tabla de nat
+                    ip_port = packet.get_protocol(ipv4.ipv4)
+
+                    nuevo_puerto = random.randint(5000,5010)
+                    while nuevo_puerto in used_ports:
+                        nuevo_puerto = random.randint(5000,5010)
+                    used_ports.append(nuevo_puerto)
+
+                    self.tablaNat.append([ip_port.src,tcp_port.src_port,ip_publica,nuevo_puerto])
+                    #Se cambian las propiedades del paquete
+                    #packet.get_protocol(tcp.tcp).src_port = nuevo_puerto
+                    #packet.get_protocol(ipv4.ipv4).src = ip_publica
+
+                    self.insertar_flujo(msg=msg, mod=0, nuevo_puerto=nuevo_puerto, ip_origen=ip_publica)
+
+                else: #Si está en la tabla
+                    #Se cambian las propiedades del paquete
+                    #packet.get_protocol(tcp.tcp).src_port = fila[3]
+                    #packet.get_protocol(ipv4.ipv4).src = fila[2]
+
+                    self.insertar_flujo(msg=msg, mod=0, nuevo_puerto=fila[3], ip_origen=fila[2])
+
+            try: #Intenta almacenar un paquete del tipo UDP
+                udp_port = packet.get_protocol(udp.udp)
+            except:
+                pass
+            if udp_port:
+                print "PAQUETE AL LLEGAR: ", packet
+                #ALMACENAR LA INFORMACIÓN EN LA TABLA:
+                esta_en_tabla = False
+                fila = None
+
+                for em in self.tablaNat: #Busca en la tabla 
+                    if udp_port.dst_port == em[3]:
+                        esta_en_tabla = True
+                        fila = em
+
+                if esta_en_tabla == False: #Si no está en la tabla
+                    #Se añade a la tabla de nat
+                    ip_port = packet.get_protocol(ipv4.ipv4)
+
+                    nuevo_puerto = random.randint(5000,5010)
+                    while nuevo_puerto in used_ports:
+                        nuevo_puerto = random.randint(5000,5010)
+                    print "PUERTO A INSERTAR: ", nuevo_puerto
+                    used_ports.append(nuevo_puerto)
+
+                    self.tablaNat.append([ip_port.src,udp_port.src_port,ip_publica,nuevo_puerto])
+                    #Se cambian las propiedades del paquete
+                    #packet.get_protocol(udp.udp).src_port = nuevo_puerto
+                    #packet.get_protocol(ipv4.ipv4).src = ip_publica
+                    print "no esta en la tabla"
+                    self.insertar_flujo(msg=msg, mod=0, nuevo_puerto=nuevo_puerto, ip_origen=ip_publica)
+
+                else: #Si está en la tabla
+                    #Se cambian las propiedades del paquete
+                    #packet.get_protocol(udp.udp).src_port = fila[3]
+                    #packet.get_protocol(ipv4.ipv4).src = fila[2]
+                    print "esta en la tabla"
+                    self.insertar_flujo(msg=msg, mod=0, puerto_origen=fila[1], puerto_destino=udp_port.src_port, ip_destino=fila[0])
+
+            print "TABLA: ", self.tablaNat
+            print "PUERTO DE ENTRADA: ", in_port
+            print "PAQUETE AL SALIR: ", packet
+
             self.receive_ip(datapath, packet, ethertype, in_port, msg)
 
 
@@ -122,20 +206,55 @@ class SimpleRouter(app_manager.RyuApp):
                   data=data)
         datapath.send_msg(out)
 
-    def insertar_flujo(self, msg, mac, port):
+    def insertar_flujo(self, msg, mac=None, port=None, mod=1, protoc=1, puerto_origen=None, puerto_destino=None, ip_origen=None, ip_destino=None,sentido=1):
+        
+
         datapath = msg.datapath
         pckt = packet.Packet(msg.data)
         ipPacket = pckt.get_protocol(ipv4.ipv4)
         eth = pckt.get_protocol(ethernet.ethernet)
 
         match = datapath.ofproto_parser.OFPMatch(eth_dst=eth.dst, eth_type=ether.ETH_TYPE_IP)
-        actions = [
-            datapath.ofproto_parser.OFPActionSetField(eth_src=self.ports_to_ips[port-1][2]),
-            datapath.ofproto_parser.OFPActionSetField(eth_dst=mac),
-            datapath.ofproto_parser.OFPActionOutput(port)
-            ]
+        if mod == 1:
+            actions = [
+                datapath.ofproto_parser.OFPActionSetField(eth_src=self.ports_to_ips[port-1][2]),
+                datapath.ofproto_parser.OFPActionSetField(eth_dst=mac),
+                datapath.ofproto_parser.OFPActionOutput(port)
+                ]
+        # TCP/UDP
+        elif mod == 0:
+
+            if sentido == 0:
+                #No esta enn la tabla
+                if protoc==1: #TCP
+                    actions = [
+                        datapath.ofproto_parser.OFPActionSetField(tcp_src=puerto_origen),
+                        datapath.ofproto_parser.OFPActionSetField(ipv4_src=ip_origen)
+                        ]
+                elif protoc==0: #UPD
+                    actions = [
+                        datapath.ofproto_parser.OFPActionSetField(udp_src=puerto_origen),
+                        datapath.ofproto_parser.OFPActionSetField(ipv4_src=ip_origen)
+                        ]
+            else:
+                #Esta en la tabla    
+                if protoc==1: #TCP
+                    actions = [
+                        datapath.ofproto_parser.OFPActionSetField(tcp_src=puerto_origen),
+                        datapath.ofproto_parser.OFPActionSetField(tcp_dst=puerto_destino),
+                        datapath.ofproto_parser.OFPActionSetField(ipv4_dst=ip_destino)
+                        ]
+
+                elif protoc==0: #UPD
+                    actions = [
+                        datapath.ofproto_parser.OFPActionSetField(udp_src=puerto_origen),
+                        datapath.ofproto_parser.OFPActionSetField(udp_dst=puerto_destino),
+                        datapath.ofproto_parser.OFPActionSetField(ipv4_dst=ip_destino)
+                        ]
 
         self.add_flow(datapath=datapath, priority=0, match=match, actions=actions, buffer_id=msg.buffer_id)
+
+
     # Procesar si se trata de una respuesta o una peticion ARP
     def receive_arp(self, datapath, packet, etherFrame, inPort):
 
@@ -161,7 +280,7 @@ class SimpleRouter(app_manager.RyuApp):
         elif arp_msg.opcode == arp.ARP_REPLY:
             self.ipToMac[arp_msg.src_ip] = arp_msg.src_mac
             for (msg,port) in self.dict_pendientes[arp_msg.src_ip]:
-                self.insertar_flujo(msg, arp_msg.src_mac, port)
+                self.insertar_flujo(msg=msg, mac=arp_msg.src_mac, port=port, mod=1)
             self.dict_pendientes[arp_msg.src_ip] = []
  
         
@@ -184,9 +303,9 @@ class SimpleRouter(app_manager.RyuApp):
                 actions = [datapath.ofproto_parser.OFPActionOutput(port)]
 
                 self.add_flow(datapath, 0, match, actions)
-                self.insertar_flujo(msg, self.ipToMac[next_hop], port)
+                self.insertar_flujo(msg=msg, mac=self.ipToMac[next_hop], port=port, mod=1)
             else: #Si no está dentro de la tabla se construye un paquete ARP para averiguar su MAC
-                print "---- NEXT_HOP -----", next_hop
+                # print "---- NEXT_HOP -----", next_hop
                 e = ethernet.ethernet(src=etherFrame.dst, ethertype=ether.ETH_TYPE_ARP)
                 a = arp.arp(opcode=arp.ARP_REQUEST,
                             src_ip=self.ports_to_ips[port-1][0],
