@@ -93,11 +93,17 @@ class SimpleRouter(app_manager.RyuApp):
             self.receive_arp(datapath, packet, ethertype, in_port)
 
         elif eth.ethertype==ether.ETH_TYPE_IP: #Si se trata de un paquete IP
-            try: #Intenta almacenar un paquete del tipo TCPs
+            print "PAQUETE AL LLEGAR: ", packet
+            ip_port = packet.get_protocol(ipv4.ipv4)
+            try: #Intenta almacenar un paquete del tipo TCP
                 tcp_port = packet.get_protocol(tcp.tcp)
             except:
                 pass
-            if tcp_port:
+            try: #Intenta almacenar un paquete del tipo UDP
+                udp_port = packet.get_protocol(udp.udp)
+            except:
+                pass
+            if tcp_port: #Se trata de un paquete TCP
                 print "PAQUETE AL LLEGAR: ", packet
                 #ALMACENAR LA INFORMACIÓN EN LA TABLA:
                 esta_en_tabla = False
@@ -110,45 +116,38 @@ class SimpleRouter(app_manager.RyuApp):
 
                 if esta_en_tabla == False: #Si no está en la tabla
                     #Se añade a la tabla de nat
-                    ip_port = packet.get_protocol(ipv4.ipv4)
 
                     nuevo_puerto = random.randint(5000,5010)
                     while nuevo_puerto in used_ports:
                         nuevo_puerto = random.randint(5000,5010)
                     used_ports.append(nuevo_puerto)
-
+                    #                    [ip origen  ,puerto origen    ,ip pública,puerto público]
                     self.tablaNat.append([ip_port.src,tcp_port.src_port,ip_publica,nuevo_puerto])
                     #Se cambian las propiedades del paquete
-                    #packet.get_protocol(tcp.tcp).src_port = nuevo_puerto
-                    #packet.get_protocol(ipv4.ipv4).src = ip_publica
-
                     self.insertar_flujo(msg=msg, mod=0, nuevo_puerto=nuevo_puerto, ip_origen=ip_publica)
 
                 else: #Si está en la tabla
                     #Se cambian las propiedades del paquete
-                    #packet.get_protocol(tcp.tcp).src_port = fila[3]
-                    #packet.get_protocol(ipv4.ipv4).src = fila[2]
-
                     self.insertar_flujo(msg=msg, mod=0, nuevo_puerto=fila[3], ip_origen=fila[2])
-
-            try: #Intenta almacenar un paquete del tipo UDP
-                udp_port = packet.get_protocol(udp.udp)
-            except:
-                pass
-            if udp_port:
-                print "PAQUETE AL LLEGAR: ", packet
+            elif udp_port: #Se trata de un paquete UDP
                 #ALMACENAR LA INFORMACIÓN EN LA TABLA:
                 esta_en_tabla = False
                 fila = None
-
-                for em in self.tablaNat: #Busca en la tabla 
-                    if udp_port.dst_port == em[3]:
-                        esta_en_tabla = True
-                        fila = em
+                red_privada = True
+                if in_port in [2,3,4]: #Si pertenece a la red privada
+                    for em in self.tablaNat: #Busca en la tabla 
+                        if ip_port.src == em[0]:
+                            esta_en_tabla = True
+                            fila = em
+                else: #Si pertenece a la red pública
+                    red_privada = False
+                    for em in self.tablaNat: #Busca en la tabla 
+                        if udp_port.dst_port == em[3]:
+                            esta_en_tabla = True
+                            fila = em
 
                 if esta_en_tabla == False: #Si no está en la tabla
                     #Se añade a la tabla de nat
-                    ip_port = packet.get_protocol(ipv4.ipv4)
 
                     nuevo_puerto = random.randint(5000,5010)
                     while nuevo_puerto in used_ports:
@@ -158,24 +157,18 @@ class SimpleRouter(app_manager.RyuApp):
 
                     self.tablaNat.append([ip_port.src,udp_port.src_port,ip_publica,nuevo_puerto])
                     #Se cambian las propiedades del paquete
-                    #packet.get_protocol(udp.udp).src_port = nuevo_puerto
-                    #packet.get_protocol(ipv4.ipv4).src = ip_publica
-                    print "no esta en la tabla"
-                    self.insertar_flujo(msg=msg, mod=0, nuevo_puerto=nuevo_puerto, ip_origen=ip_publica)
+                    self.insertar_flujo(msg=msg, mod=0, puerto_origen=nuevo_puerto, ip_origen=ip_publica, sentido=0, protoc=0, port=1)
 
                 else: #Si está en la tabla
                     #Se cambian las propiedades del paquete
-                    #packet.get_protocol(udp.udp).src_port = fila[3]
-                    #packet.get_protocol(ipv4.ipv4).src = fila[2]
-                    print "esta en la tabla"
-                    self.insertar_flujo(msg=msg, mod=0, puerto_origen=fila[1], puerto_destino=udp_port.src_port, ip_destino=fila[0])
-
+                    if red_privada == False:
+                        self.insertar_flujo(msg=msg, mod=0, puerto_destino=fila[1], ip_destino=fila[0], sentido=1, protoc=0, port=1)
+                    if red_privada == True:
+                        self.insertar_flujo(msg=msg, mod=0, puerto_origen=fila[3], ip_origen=ip_publica, sentido=0, protoc=0, port=1)
+            else: #Se trata de un paquete ICMP
+                self.receive_ip(datapath, packet, ethertype, in_port, msg)
             print "TABLA: ", self.tablaNat
             print "PUERTO DE ENTRADA: ", in_port
-            print "PAQUETE AL SALIR: ", packet
-
-            self.receive_ip(datapath, packet, ethertype, in_port, msg)
-
 
     #  Inserta una entrada a la tabla de flujo.
     def add_flow(self, datapath, priority, match, actions, buffer_id=None):
@@ -189,6 +182,7 @@ class SimpleRouter(app_manager.RyuApp):
             else:
                 mod = parser.OFPFlowMod(datapath=datapath, priority=priority,
                     match=match, instructions=inst, idle_timeout=30,command=ofproto.OFPFC_ADD)
+            print "****** SALIDA FINAL: ****** ", mod
             datapath.send_msg(mod)
             
     # Enviar un paquete construido en el controlador
@@ -208,14 +202,13 @@ class SimpleRouter(app_manager.RyuApp):
 
     def insertar_flujo(self, msg, mac=None, port=None, mod=1, protoc=1, puerto_origen=None, puerto_destino=None, ip_origen=None, ip_destino=None,sentido=1):
         
-
         datapath = msg.datapath
         pckt = packet.Packet(msg.data)
         ipPacket = pckt.get_protocol(ipv4.ipv4)
         eth = pckt.get_protocol(ethernet.ethernet)
-
-        match = datapath.ofproto_parser.OFPMatch(eth_dst=eth.dst, eth_type=ether.ETH_TYPE_IP)
+        #Paquete ICMP
         if mod == 1:
+            match = datapath.ofproto_parser.OFPMatch(eth_dst=eth.dst, eth_type=ether.ETH_TYPE_IP)
             actions = [
                 datapath.ofproto_parser.OFPActionSetField(eth_src=self.ports_to_ips[port-1][2]),
                 datapath.ofproto_parser.OFPActionSetField(eth_dst=mac),
@@ -223,35 +216,53 @@ class SimpleRouter(app_manager.RyuApp):
                 ]
         # TCP/UDP
         elif mod == 0:
-
             if sentido == 0:
-                #No esta enn la tabla
+                #No esta en la tabla
                 if protoc==1: #TCP
+                    print "NO ESTÁ EN LA TABLA [TCP]"
+                    match = datapath.ofproto_parser.OFPMatch(eth_dst=eth.dst, eth_type=ether.ETH_TYPE_IP, ip_proto=inet.IPPROTO_TCP)
                     actions = [
                         datapath.ofproto_parser.OFPActionSetField(tcp_src=puerto_origen),
-                        datapath.ofproto_parser.OFPActionSetField(ipv4_src=ip_origen)
+                        datapath.ofproto_parser.OFPActionSetField(ipv4_src=ip_origen),
+                        datapath.ofproto_parser.OFPActionOutput(port)
                         ]
+                    print " - Se ha modificado el puerto de origen por: ", puerto_origen
+                    print " - Se ha modificado la ip de origen por:", ip_origen
                 elif protoc==0: #UPD
+                    print "NO ESTÁ EN LA TABLA [UDP]"
+                    match = datapath.ofproto_parser.OFPMatch(eth_dst=eth.dst, eth_type=ether.ETH_TYPE_IP, ip_proto=inet.IPPROTO_UDP)
                     actions = [
                         datapath.ofproto_parser.OFPActionSetField(udp_src=puerto_origen),
-                        datapath.ofproto_parser.OFPActionSetField(ipv4_src=ip_origen)
+                        datapath.ofproto_parser.OFPActionSetField(ipv4_src=ip_origen),
+                        datapath.ofproto_parser.OFPActionOutput(port)
                         ]
-            else:
+                    print " - Se ha modificado el puerto de origen por: ", puerto_origen
+                    print " - Se ha modificado la ip de origen por:", ip_origen
+            elif sentido == 1:
                 #Esta en la tabla    
                 if protoc==1: #TCP
+                    print "ESTÁ EN LA TABLA [TCP]"
+                    match = datapath.ofproto_parser.OFPMatch(eth_dst=eth.dst, eth_type=ether.ETH_TYPE_IP, ip_proto=inet.IPPROTO_TCP)
                     actions = [
-                        datapath.ofproto_parser.OFPActionSetField(tcp_src=puerto_origen),
+                        #datapath.ofproto_parser.OFPActionSetField(tcp_src=puerto_origen),
                         datapath.ofproto_parser.OFPActionSetField(tcp_dst=puerto_destino),
-                        datapath.ofproto_parser.OFPActionSetField(ipv4_dst=ip_destino)
+                        datapath.ofproto_parser.OFPActionSetField(ipv4_dst=ip_destino),
+                        datapath.ofproto_parser.OFPActionOutput(port)
                         ]
-
+                    print " - Se ha modificado el puerto de destino por: ", puerto_destino
+                    print " - Se ha modificado la ip de destino por: ", ip_destino
                 elif protoc==0: #UPD
+                    print "ESTÁ EN LA TABLA [UDP]"
+                    match = datapath.ofproto_parser.OFPMatch(eth_dst=eth.dst, eth_type=ether.ETH_TYPE_IP, ip_proto=inet.IPPROTO_UDP)
                     actions = [
-                        datapath.ofproto_parser.OFPActionSetField(udp_src=puerto_origen),
+                        #datapath.ofproto_parser.OFPActionSetField(udp_src=puerto_origen),
                         datapath.ofproto_parser.OFPActionSetField(udp_dst=puerto_destino),
-                        datapath.ofproto_parser.OFPActionSetField(ipv4_dst=ip_destino)
+                        datapath.ofproto_parser.OFPActionSetField(ipv4_dst=ip_destino),
+                        datapath.ofproto_parser.OFPActionOutput(port)
                         ]
-
+                    print " - Se ha modificado el puerto de destino por: ", puerto_destino
+                    print " - Se ha modificado la ip de destino por: ", ip_destino
+        print "------- ACTIONS: :    ", actions
         self.add_flow(datapath=datapath, priority=0, match=match, actions=actions, buffer_id=msg.buffer_id)
 
 
