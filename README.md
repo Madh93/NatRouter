@@ -34,6 +34,6 @@ Debido a estas tres causas no podemos acabar esta maldición.
     
 **Netcat TCP/UDP**
 
-    $ h1 nc h2 12345
-    $ h1 nc -uv h2 12345
+    $ h1 nc -p 346 h2 12345
+    $ h1 nc -uvp 236 h2 12345
     
