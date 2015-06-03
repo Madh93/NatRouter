@@ -131,17 +131,22 @@ class SimpleRouter(app_manager.RyuApp):
                     #Se cambian las propiedades del paquete
 
 
-                    #AQUÍ SE METEN COSAS:
+                    #AQUÍ SE METE ARP:
 
 
-                    self.insertar_flujo(msg=msg, mod=0, puerto_origen=nuevo_puerto, ip_origen=ip_publica, sentido=0, protoc=0, port=0) #Pasarle una MAC
+                    self.insertar_flujo(msg=msg, mod=0, puerto_origen=nuevo_puerto, ip_origen=ip_publica, sentido=1, protoc=1, port=0) #Pasarle una MAC
 
                 else: #Si está en la tabla
                     #Se cambian las propiedades del paquete
-                    if red_privada == False: #Proviene de la red privada
-                        self.insertar_flujo(msg=msg, mod=0, puerto_destino=fila[1], ip_destino=fila[0], sentido=1, protoc=0, port=0, mac=fila[4])
-                    if red_privada == True: #Proviene de la red pública
-                        self.insertar_flujo(msg=msg, mod=0, puerto_origen=fila[3], ip_origen=ip_publica, sentido=0, protoc=0, port=0) #Pasarle una MAC
+                    if red_privada == False: #Proviene de la red pública
+                        self.insertar_flujo(msg=msg, mod=0, puerto_destino=fila[1], ip_destino=fila[0], sentido=0, protoc=1, port=0, mac=fila[4])
+                    if red_privada == True: #Proviene de la red privada
+
+
+                        #AQUÍ SE METE ARP:
+
+
+                        self.insertar_flujo(msg=msg, mod=0, puerto_origen=fila[3], ip_origen=ip_publica, sentido=1, protoc=1, port=0) #Pasarle una MAC
             elif udp_port: #Se trata de un paquete UDP
                 #ALMACENAR LA INFORMACIÓN EN LA TABLA:
                 esta_en_tabla = False
@@ -176,14 +181,19 @@ class SimpleRouter(app_manager.RyuApp):
                     #AQUÍ SE METEN COSAS:
 
 
-                    self.insertar_flujo(msg=msg, mod=0, puerto_origen=nuevo_puerto, ip_origen=ip_publica, sentido=0, protoc=0, port=0) #Pasarle una MAC
+                    self.insertar_flujo(msg=msg, mod=0, puerto_origen=nuevo_puerto, ip_origen=ip_publica, sentido=1, protoc=0, port=0) #Pasarle una MAC
 
                 else: #Si está en la tabla
                     #Se cambian las propiedades del paquete
-                    if red_privada == False:
-                        self.insertar_flujo(msg=msg, mod=0, puerto_destino=fila[1], ip_destino=fila[0], sentido=1, protoc=0, port=0, mac=fila[4])
-                    if red_privada == True:
-                        self.insertar_flujo(msg=msg, mod=0, puerto_origen=fila[3], ip_origen=ip_publica, sentido=0, protoc=0, port=0) #Pasarle una MAC
+                    if red_privada == False: #Proviene de la red pública
+                        self.insertar_flujo(msg=msg, mod=0, puerto_destino=fila[1], ip_destino=fila[0], sentido=0, protoc=0, port=0, mac=fila[4]) #Pasarle una MAC
+                    if red_privada == True: #Proviene de la red privada
+                    
+
+                        #AQUÍ SE METE ARP:
+
+
+                        self.insertar_flujo(msg=msg, mod=0, puerto_origen=fila[3], ip_origen=ip_publica, sentido=1, protoc=0, port=0) 
             else: #Se trata de un paquete ICMP
                 self.receive_ip(datapath, packet, ethertype, in_port, msg)
             print "TABLA: ", self.tablaNat
@@ -256,7 +266,7 @@ class SimpleRouter(app_manager.RyuApp):
                         ]
                     print " - Se ha modificado el puerto de origen por: ", puerto_origen
                     print " - Se ha modificado la ip de origen por:", ip_origen
-            elif sentido == 1: #Proviene de la red privada 
+            elif sentido == 1: #Proviene de la red privada
                 print "PROVIENE DE LA RED PRIVADA"  
                 if protoc==1: #TCP
                     match = datapath.ofproto_parser.OFPMatch(eth_src=self.ports_to_ips[1][2], eth_dst=mac, eth_type=ether.ETH_TYPE_IP, ip_proto=inet.IPPROTO_TCP)
@@ -412,7 +422,6 @@ class SimpleRouter(app_manager.RyuApp):
         #Mensaje a enviar
         out = datapath.ofproto_parser.OFPPacketOut(datapath=datapath, buffer_id=0xffffffff, in_port=datapath.ofproto.OFPP_CONTROLLER, actions=actions, data=p.data)
         datapath.send_msg(out) #Enviar mensaje
-
 
     def find_mac(self, datapath, etherFrame, msg):
 
