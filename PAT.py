@@ -50,7 +50,7 @@ class SimpleRouter(app_manager.RyuApp):
         self.tablaEnrutamiento = [('10.0.0.0','255.255.255.0',1,None),
                                   ('10.0.1.0','255.255.255.0',2,None)]
 
-        #[ip_privada(src), puerto_privado(src_port), ip_publica(dst), puerto_publico(dst_port), mac_origen]
+        #[ip_privada(src), puerto_privado(src_port), ip_publica(dst), puerto_publico(dst_port)]
         self.tablaNat = []
 
         self.dict_pendientes = dict()
@@ -93,29 +93,32 @@ class SimpleRouter(app_manager.RyuApp):
         elif eth.ethertype==ether.ETH_TYPE_IP: #Si se trata de un paquete IP
 
             print "PAQUETE AL LLEGAR: ", packet
-            ip_port = packet.get_protocol(ipv4.ipv4)
+            cabecera_ip = packet.get_protocol(ipv4.ipv4)
+            print "GUARDA EN IPTOMAC la IP: ", cabecera_ip.src
+            print "RELACIONADA con la MAC: ", src
+            self.ipToMac[cabecera_ip.src] = src
             try: #Intenta almacenar un paquete del tipo TCP
-                tcp_port = packet.get_protocol(tcp.tcp)
+                cabecera_tcp = packet.get_protocol(tcp.tcp)
             except:
                 pass
             try: #Intenta almacenar un paquete del tipo UDP
-                udp_port = packet.get_protocol(udp.udp)
+                cabecera_udp = packet.get_protocol(udp.udp)
             except:
                 pass
-            if tcp_port: #Se trata de un paquete TCP
+            if cabecera_tcp: #Se trata de un paquete TCP
                 #ALMACENAR LA INFORMACIÓN EN LA TABLA:
                 esta_en_tabla = False
                 fila = None
                 red_privada = True
                 if in_port in [2,3,4]: #Si pertenece a la red privada
-                    for em in self.tablaNat: #Busca en la tabla por Ip origen ??
-                        if ip_port.src == em[0]:
+                    for em in self.tablaNat: #Busca en la tabla por Ip origen ?? #PUERTO DE ORIGEN
+                        if ((cabecera_ip.src == em[0]) and (cabecera_tcp.src_port == em[1])):
                             esta_en_tabla = True
                             fila = em
                 else: #Si pertenece a la red pública
                     red_privada = False
                     for em in self.tablaNat: #Busca en la tabla por puerto destino ??
-                        if tcp_port.dst_port == em[3]:
+                        if cabecera_tcp.dst_port == em[3]:
                             esta_en_tabla = True
                             fila = em
 
@@ -127,74 +130,85 @@ class SimpleRouter(app_manager.RyuApp):
                     print "PUERTO A INSERTAR: ", nuevo_puerto
                     used_ports.append(nuevo_puerto)
                     #Se añade a la tabla de nat
-                    self.tablaNat.append([ip_port.src,tcp_port.src_port,ip_publica,nuevo_puerto,src])
-                    #Se cambian las propiedades del paquete
-
-
-                    #AQUÍ SE METE ARP:
-
-
-                    self.insertar_flujo(msg=msg, mod=0, puerto_origen=nuevo_puerto, ip_origen=ip_publica, sentido=1, protoc=1, port=0) #Pasarle una MAC
-
+                    self.tablaNat.append([cabecera_ip.src,cabecera_tcp.src_port,ip_publica,nuevo_puerto])
+                    #Buscar la entrada aplicable en la tabla de enrutamiento
+                    (next_hop, port) = self.find_in_routingTable(cabecera_ip.dst)
+                    #Conozco la mac de destino?
+                    if next_hop in self.ipToMac.keys():
+                        mac = self.ipToMac[next_hop]
+                    else:
+                        #Si no está dentro de la tabla se construye un paquete ARP para averiguar su MAC
+                        self.enviar_arp(mac_origen=self.ports_to_ips[0][2], port=port, next_hop=next_hop, datapath=datapath, msg=msg, nat=1, puertoNat=nuevo_puerto)
                 else: #Si está en la tabla
                     #Se cambian las propiedades del paquete
+                    #Buscar la entrada aplicable en la tabla de enrutamiento
+                    (next_hop, port) = self.find_in_routingTable(cabecera_ip.dst)
                     if red_privada == False: #Proviene de la red pública
-                        self.insertar_flujo(msg=msg, mod=0, puerto_destino=fila[1], ip_destino=fila[0], sentido=0, protoc=1, port=0, mac=fila[4])
+                        print "PORT: ", port
+                        print "ALSDJGFHADKGAD: ", self.ipToMac[fila[0]]
+                        #[ip_privada(src), puerto_privado(src_port), ip_publica(dst), puerto_publico(dst_port)]
+                        self.insertar_flujo(msg=msg, mod=0, puerto_destino=fila[1], ip_destino=fila[0], sentido=0, protoc=1, port=2, mac=self.ipToMac[fila[0]])
                     if red_privada == True: #Proviene de la red privada
+                        
+                        #Conozco la mac de destino?
+                        if next_hop in self.ipToMac.keys():
+                            mac = self.ipToMac[next_hop]
+                        else:
+                            #Si no está dentro de la tabla se construye un paquete ARP para averiguar su MAC
+                            self.enviar_arp(mac_origen=self.ports_to_ips[0][2], port=port, next_hop=next_hop, datapath=datapath, msg=msg, nat=1, puertoNat=fila[3])
 
-
-                        #AQUÍ SE METE ARP:
-
-
-                        self.insertar_flujo(msg=msg, mod=0, puerto_origen=fila[3], ip_origen=ip_publica, sentido=1, protoc=1, port=0) #Pasarle una MAC
-            elif udp_port: #Se trata de un paquete UDP
+            elif cabecera_udp: #Se trata de un paquete UDP
                 #ALMACENAR LA INFORMACIÓN EN LA TABLA:
                 esta_en_tabla = False
                 fila = None
                 red_privada = True
                 if in_port in [2,3,4]: #Si pertenece a la red privada
-                    for em in self.tablaNat: #Busca en la tabla 
-                        if ip_port.src == em[0]:
+                    for em in self.tablaNat: #Busca en la tabla por Ip origen ?? #PUERTO DE ORIGEN
+                        if ((cabecera_ip.src == em[0]) and (cabecera_tcp.src_port == em[1])):
                             esta_en_tabla = True
                             fila = em
                 else: #Si pertenece a la red pública
                     red_privada = False
-                    for em in self.tablaNat: #Busca en la tabla 
-                        if udp_port.dst_port == em[3]:
+                    for em in self.tablaNat: #Busca en la tabla por puerto destino ??
+                        if cabecera_udp.dst_port == em[3]:
                             esta_en_tabla = True
                             fila = em
 
                 if esta_en_tabla == False: #Si no está en la tabla
-                    #Se añade a la tabla de nat
-
+                    #Se crea un puerto aleatorio.
                     nuevo_puerto = random.randint(5000,5010)
                     while nuevo_puerto in used_ports:
                         nuevo_puerto = random.randint(5000,5010)
                     print "PUERTO A INSERTAR: ", nuevo_puerto
                     used_ports.append(nuevo_puerto)
-
-                    self.tablaNat.append([ip_port.src,udp_port.src_port,ip_publica,nuevo_puerto,src])
-
-                    (next_hop, port) = self.find_in_routingTable(ipPacket.dst) #Almacena el puerto y el siguiente salto
-                    
-
-                    #AQUÍ SE METEN COSAS:
-
-
-                    self.insertar_flujo(msg=msg, mod=0, puerto_origen=nuevo_puerto, ip_origen=ip_publica, sentido=1, protoc=0, port=0) #Pasarle una MAC
-
+                    #Se añade a la tabla de nat
+                    self.tablaNat.append([cabecera_ip.src,cabecera_udp.src_port,ip_publica,nuevo_puerto])
+                    #Buscar la entrada aplicable en la tabla de enrutamiento
+                    (next_hop, port) = self.find_in_routingTable(cabecera_ip.dst)
+                    #Conozco la mac de destino?
+                    if next_hop in self.ipToMac.keys():
+                        mac = self.ipToMac[next_hop]
+                    else:
+                        #Si no está dentro de la tabla se construye un paquete ARP para averiguar su MAC
+                        self.enviar_arp(mac_origen=self.ports_to_ips[0][2], port=port, next_hop=next_hop, datapath=datapath, msg=msg, nat=1, puertoNat=nuevo_puerto)
                 else: #Si está en la tabla
                     #Se cambian las propiedades del paquete
+                    #Buscar la entrada aplicable en la tabla de enrutamiento
+                    (next_hop, port) = self.find_in_routingTable(cabecera_ip.dst)
                     if red_privada == False: #Proviene de la red pública
-                        self.insertar_flujo(msg=msg, mod=0, puerto_destino=fila[1], ip_destino=fila[0], sentido=0, protoc=0, port=0, mac=fila[4]) #Pasarle una MAC
+                        print "PORT: ", port
+                        print "ALSDJGFHADKGAD: ", self.ipToMac[fila[0]]
+                        #[ip_privada(src), puerto_privado(src_port), ip_publica(dst), puerto_publico(dst_port)]
+                        self.insertar_flujo(msg=msg, mod=0, puerto_destino=fila[1], ip_destino=fila[0], sentido=0, protoc=1, port=2, mac=self.ipToMac[fila[0]])
                     if red_privada == True: #Proviene de la red privada
-                    
-
-                        #AQUÍ SE METE ARP:
-
-
-                        self.insertar_flujo(msg=msg, mod=0, puerto_origen=fila[3], ip_origen=ip_publica, sentido=1, protoc=0, port=0) 
-            else: #Se trata de un paquete ICMP
+                        
+                        #Conozco la mac de destino?
+                        if next_hop in self.ipToMac.keys():
+                            mac = self.ipToMac[next_hop]
+                        else:
+                            #Si no está dentro de la tabla se construye un paquete ARP para averiguar su MAC
+                            self.enviar_arp(mac_origen=self.ports_to_ips[0][2], port=port, next_hop=next_hop, datapath=datapath, msg=msg, nat=1, puertoNat=fila[3])
+            else: #Se trata de un paquete ICMP o de otro tipo...
                 self.receive_ip(datapath, packet, ethertype, in_port, msg)
             print "TABLA: ", self.tablaNat
             print "PUERTO DE ENTRADA: ", in_port
@@ -242,8 +256,8 @@ class SimpleRouter(app_manager.RyuApp):
                 datapath.ofproto_parser.OFPActionOutput(port)
                 ]
         elif mod == 0: # TCP/UDP
-            if sentido == 0: #Proviene de la red pública
-                print "PROVIENE DE LA RED PÚBLICA"
+            if sentido == 1: #Proviene de la red privada
+                print "PROVIENE DE LA RED PRIVADA"
                 if protoc==1: #TCP
                     match = datapath.ofproto_parser.OFPMatch(eth_src=self.ports_to_ips[0][2], eth_dst=mac, eth_type=ether.ETH_TYPE_IP, ip_proto=inet.IPPROTO_TCP)
                     actions = [
@@ -255,6 +269,8 @@ class SimpleRouter(app_manager.RyuApp):
                         ]
                     print " - Se ha modificado el puerto de origen por: ", puerto_origen
                     print " - Se ha modificado la ip de origen por:", ip_origen
+                    print " - Se ha modificado la MAC de origen por: ", self.ports_to_ips[port-1][2]
+                    print " - Se ha lanzado por la interfaz: ", port
                 elif protoc==0: #UPD
                     match = datapath.ofproto_parser.OFPMatch(eth_src=self.ports_to_ips[0][2], eth_dst=mac, eth_type=ether.ETH_TYPE_IP, ip_proto=inet.IPPROTO_UDP)
                     actions = [
@@ -266,27 +282,31 @@ class SimpleRouter(app_manager.RyuApp):
                         ]
                     print " - Se ha modificado el puerto de origen por: ", puerto_origen
                     print " - Se ha modificado la ip de origen por:", ip_origen
-            elif sentido == 1: #Proviene de la red privada
-                print "PROVIENE DE LA RED PRIVADA"  
+            elif sentido == 0: #Proviene de la red publica
+                print "PROVIENE DE LA RED PÚBLICA"   
                 if protoc==1: #TCP
                     match = datapath.ofproto_parser.OFPMatch(eth_src=self.ports_to_ips[1][2], eth_dst=mac, eth_type=ether.ETH_TYPE_IP, ip_proto=inet.IPPROTO_TCP)
                     actions = [
                         #datapath.ofproto_parser.OFPActionSetField(tcp_src=puerto_origen),
                         datapath.ofproto_parser.OFPActionSetField(tcp_dst=puerto_destino),
                         datapath.ofproto_parser.OFPActionSetField(ipv4_dst=ip_destino),
-                        datapath.ofproto_parser.OFPActionSetField(eth_src=self.ports_to_ips[port-1][2]),
+                        datapath.ofproto_parser.OFPActionSetField(eth_src=self.ports_to_ips[port-2][2]),
                         datapath.ofproto_parser.OFPActionSetField(eth_dst=mac),                        
                         datapath.ofproto_parser.OFPActionOutput(port)
                         ]
                     print " - Se ha modificado el puerto de destino por: ", puerto_destino
                     print " - Se ha modificado la ip de destino por: ", ip_destino
+                    print " - Se ha modificado la MAC de origen por: ", self.ports_to_ips[port-2][2]
+                    print " - Se ha lanzado por la interfaz: ", port
+                    print " - Se ha modificado la MAC de destino por: ", mac
+
                 elif protoc==0: #UPD
                     match = datapath.ofproto_parser.OFPMatch(eth_src=self.ports_to_ips[1][2], eth_dst=mac, eth_type=ether.ETH_TYPE_IP, ip_proto=inet.IPPROTO_UDP)
                     actions = [
                         #datapath.ofproto_parser.OFPActionSetField(udp_src=puerto_origen),
                         datapath.ofproto_parser.OFPActionSetField(udp_dst=puerto_destino),
                         datapath.ofproto_parser.OFPActionSetField(ipv4_dst=ip_destino),
-                        datapath.ofproto_parser.OFPActionSetField(eth_src=self.ports_to_ips[port-1][2]),
+                        datapath.ofproto_parser.OFPActionSetField(eth_src=self.ports_to_ips[port-2][2]),
                         datapath.ofproto_parser.OFPActionSetField(eth_dst=mac),                        
                         datapath.ofproto_parser.OFPActionOutput(port)
                         ]
@@ -319,8 +339,11 @@ class SimpleRouter(app_manager.RyuApp):
         
         elif arp_msg.opcode == arp.ARP_REPLY:
             self.ipToMac[arp_msg.src_ip] = arp_msg.src_mac
-            for (msg,port) in self.dict_pendientes[arp_msg.src_ip]:
-                self.insertar_flujo(msg=msg, mac=arp_msg.src_mac, port=port, mod=1)
+            for (msg,port,nat,puertoNat) in self.dict_pendientes[arp_msg.src_ip]:
+                if nat == None and puertoNat == None:
+                    self.insertar_flujo(msg=msg, mac=arp_msg.src_mac, port=port, mod=1)
+                elif nat == 1:
+                    self.insertar_flujo(msg=msg, mod=0, puerto_origen=puertoNat, ip_origen=ip_publica, sentido=1, protoc=1, port=port, mac=arp_msg.src_mac)
             self.dict_pendientes[arp_msg.src_ip] = []
   
     def receive_ip(self, datapath, packet, etherFrame, inPort, msg): #Función que se usa cuando se recibe un paquete IP
@@ -356,7 +379,7 @@ class SimpleRouter(app_manager.RyuApp):
                 p.add_protocol(a)
                 if next_hop not in self.dict_pendientes:
                     self.dict_pendientes[next_hop] = []
-                self.dict_pendientes[next_hop] = self.dict_pendientes[next_hop] + [(msg, port)]
+                self.dict_pendientes[next_hop] = self.dict_pendientes[next_hop] + [(msg, port,None,None)]
                 self.send_packet(datapath=datapath, port=port, packet=p)
 
             #find_mac(self, datapath, etherFrame, msg)
@@ -447,6 +470,44 @@ class SimpleRouter(app_manager.RyuApp):
             p.add_protocol(a)
             if next_hop not in self.dict_pendientes:
                 self.dict_pendientes[next_hop] = []
-            self.dict_pendientes[next_hop] = self.dict_pendientes[next_hop] + [(msg, port)]
+            self.dict_pendientes[next_hop] = self.dict_pendientes[next_hop] + [(msg, port, None, None)]
             self.send_packet(datapath=datapath, port=port, packet=p)
+
+    def insertar_en_cola(self, ip, puerto, msg, nat=None, puertoNat=None):
+        if ip not in self.dict_pendientes:  
+            self.dict_pendientes[ip] = []
+        self.dict_pendientes[ip] = self.dict_pendientes[ip]+[(msg,puerto,nat,puertoNat)]
+
+    def sacar_de_cola(self, ip):
+        envio = dict_pendientes.cola[ip]
+        self.dict_pendientes[ip]=[]
+        return envio
+
+
+
+    def enviar_arp(self, mac_origen, port, next_hop, datapath, msg, nat=None, puertoNat=None):
+        e = ethernet.ethernet(src=mac_origen, ethertype=ether.ETH_TYPE_ARP)
+        a = arp.arp(opcode=arp.ARP_REQUEST,
+            src_ip=self.ports_to_ips[port-1][0],
+            src_mac=mac_origen,
+            dst_ip=next_hop)
+        #puerto = mac_origen
+        p = Packet()
+        p.add_protocol(e)
+        p.add_protocol(a)
+        self.insertar_en_cola(ip=next_hop, puerto=port, msg=msg, nat=nat, puertoNat=puertoNat)
+        self.send_packet(datapath=datapath, port=port, packet=p)
+
+
+
+
+
+
+
+
+
+
+
+
+
 
