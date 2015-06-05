@@ -26,8 +26,6 @@ from ryu.lib.packet import (
 )
 
 from ryu.lib.packet.packet import Packet
-
-# ###### PROVISIONALES... probablente se quede ######
 from ryu.lib import hub
 
 # Netaddr
@@ -38,13 +36,6 @@ from netaddr.ip import (
 
 # Otros
 import random
-
-# Funcionalidades
-import Arp
-import Icmp
-
-#def check_icmp
-
 
 
 
@@ -57,17 +48,11 @@ class Router(app_manager.RyuApp):
     def __init__(self, *args, **kwargs):
         super(Router, self).__init__(*args, **kwargs)
         self.ping_q = hub.Queue()
-        # self.portInfo = {}
-        # self.arpInfo = {}
-        # self.routingInfo = {}
-        # self.mplsInfo = {}
-
-        # self.mac_to_port=dict() # ELIMINAR
 
         ###### dict() mas ineficiente que {}!!!
         self.ipToMac = dict()
         
-        self.ports_to_ips = [('10.0.0.69','255.255.255.0','00:00:00:00:00:50'),
+        self.portsToIps = [('10.0.0.69','255.255.255.0','00:00:00:00:00:50'),
                              ('10.0.1.1','255.255.255.0','00:00:00:00:00:60')]
 
         self.tablaEnrutamiento = [('10.0.0.0','255.255.255.0',1,None),
@@ -77,9 +62,24 @@ class Router(app_manager.RyuApp):
         self.tablaNat = []
 
         self.portsPool = Range(5000,5010)
+        used_ports = []
 
-        self.dict_pendientes = dict()
+        self.cachePendientes = dict()
 
+
+    # Devuelve la red correspondiente (IPNetwork(ipaddres/mask))
+    def find_in_routingTable (self, dstIp):
+        ruta_sel = [IPNetwork('0.0.0.0/0'),0,None]
+        for ruta in self.tablaEnrutamiento:
+            if IPAddress(ruta[0]) == (IPAddress(dstIp) & IPAddress(ruta[1])):
+                if int(ruta_sel[0].prefixlen) < int(IPAddress(ruta[1])):
+                    ruta_sel[0] = IPNetwork(ruta[0],ruta[1])    #Network
+                    ruta_sel[1] = ruta[2]                       #Puerto
+                    ruta_sel[2] = ruta[3]                       #Gateway
+        if ruta_sel[2] == None:
+            return (dstIp, ruta_sel[1])
+        else:
+            return (ruta[ruta_sel[2]], ruta_sel[1])        
 
     #---------------------------------------------#
     # Gestión de los paquetes entrantes al Router #
@@ -89,17 +89,10 @@ class Router(app_manager.RyuApp):
 
         msg = ev.msg 
         datapath = msg.datapath
-        # ofproto = datapath.ofproto
         in_port = msg.match['in_port']        
 
         packet = Packet(msg.data)
         eth = packet.get_protocol(ethernet.ethernet)
-        # ethertype = packet.get_protocol(ethernet.ethernet)
-        # src = eth.src
-        # dst = eth.dst
-
-        # self.mac_to_port[src] = in_port
-        # used_ports = [] # USO LIMITADO...
 
         if eth.ethertype == ether.ETH_TYPE_ARP: #Si se trata de un paquete ARP
             self.receive_arp(datapath=datapath, packet=packet, etherFrame=eth, inPort=in_port)
@@ -116,114 +109,6 @@ class Router(app_manager.RyuApp):
                 self.receive_ip(datapath=datapath, packet=packet, etherFrame=eth, inPort=in_port, msg=msg)
 
 
-            # # print "PAQUETE AL LLEGAR: ", packet
-            # trama_ip = packet.get_protocol(ipv4.ipv4)
-            # try: #Intenta almacenar un paquete del tipo TCP
-            #     tcp_port = packet.get_protocol(tcp.tcp)
-            # except:
-            #     pass
-            # try: #Intenta almacenar un paquete del tipo UDP
-            #     udp_port = packet.get_protocol(udp.udp)
-            # except:
-            #     pass
-            # if tcp_port: #Se trata de un paquete TCP
-            #     #ALMACENAR LA INFORMACIÓN EN LA TABLA:
-            #     esta_en_tabla = False
-            #     fila = None
-            #     red_privada = True
-            #     if in_port in [2,3,4]: #Si pertenece a la red privada
-            #         for em in self.tablaNat: #Busca en la tabla por Ip origen ??
-            #             if trama_ip.src == em[0]:
-            #                 esta_en_tabla = True
-            #                 fila = em
-            #     else: #Si pertenece a la red pública
-            #         red_privada = False
-            #         for em in self.tablaNat: #Busca en la tabla por puerto destino ??
-            #             if tcp_port.dst_port == em[3]:
-            #                 esta_en_tabla = True
-            #                 fila = em
-
-            #     if esta_en_tabla == False: #Si no está en la tabla
-            #         #Se crea un puerto aleatorio.
-            #         nuevo_puerto = random.randint(5000,5010)
-            #         while nuevo_puerto in used_ports:
-            #             nuevo_puerto = random.randint(5000,5010)
-            #         print "PUERTO A INSERTAR: ", nuevo_puerto
-            #         used_ports.append(nuevo_puerto)
-            #         #Se añade a la tabla de nat
-            #         self.tablaNat.append([trama_ip.src,tcp_port.src_port,ip_publica,nuevo_puerto,src])
-            #         #Se cambian las propiedades del paquete
-
-
-            #         #AQUÍ SE METE ARP:
-
-
-            #         self.insertar_flujo(msg=msg, mod=0, puerto_origen=nuevo_puerto, ip_origen=ip_publica, sentido=1, protoc=1, port=0) #Pasarle una MAC
-
-            #     else: #Si está en la tabla
-            #         #Se cambian las propiedades del paquete
-            #         if red_privada == False: #Proviene de la red pública
-            #             self.insertar_flujo(msg=msg, mod=0, puerto_destino=fila[1], ip_destino=fila[0], sentido=0, protoc=1, port=0, mac=fila[4])
-            #         if red_privada == True: #Proviene de la red privada
-
-
-            #             #AQUÍ SE METE ARP:
-
-
-            #             self.insertar_flujo(msg=msg, mod=0, puerto_origen=fila[3], ip_origen=ip_publica, sentido=1, protoc=1, port=0) #Pasarle una MAC
-            # elif udp_port: #Se trata de un paquete UDP
-            #     #ALMACENAR LA INFORMACIÓN EN LA TABLA:
-            #     esta_en_tabla = False
-            #     fila = None
-            #     red_privada = True
-            #     if in_port in [2,3,4]: #Si pertenece a la red privada
-            #         for em in self.tablaNat: #Busca en la tabla 
-            #             if trama_ip.src == em[0]:
-            #                 esta_en_tabla = True
-            #                 fila = em
-            #     else: #Si pertenece a la red pública
-            #         red_privada = False
-            #         for em in self.tablaNat: #Busca en la tabla 
-            #             if udp_port.dst_port == em[3]:
-            #                 esta_en_tabla = True
-            #                 fila = em
-
-            #     if esta_en_tabla == False: #Si no está en la tabla
-            #         #Se añade a la tabla de nat
-
-            #         nuevo_puerto = random.randint(5000,5010)
-            #         while nuevo_puerto in used_ports:
-            #             nuevo_puerto = random.randint(5000,5010)
-            #         print "PUERTO A INSERTAR: ", nuevo_puerto
-            #         used_ports.append(nuevo_puerto)
-
-            #         self.tablaNat.append([trama_ip.src,udp_port.src_port,ip_publica,nuevo_puerto,src])
-
-            #         (next_hop, port) = self.find_in_routingTable(ipPacket.dst) #Almacena el puerto y el siguiente salto
-                    
-
-            #         #AQUÍ SE METEN COSAS:
-
-
-            #         self.insertar_flujo(msg=msg, mod=0, puerto_origen=nuevo_puerto, ip_origen=ip_publica, sentido=1, protoc=0, port=0) #Pasarle una MAC
-
-            #     else: #Si está en la tabla
-            #         #Se cambian las propiedades del paquete
-            #         if red_privada == False: #Proviene de la red pública
-            #             self.insertar_flujo(msg=msg, mod=0, puerto_destino=fila[1], ip_destino=fila[0], sentido=0, protoc=0, port=0, mac=fila[4]) #Pasarle una MAC
-            #         if red_privada == True: #Proviene de la red privada
-                    
-
-            #             #AQUÍ SE METE ARP:
-
-
-            #             self.insertar_flujo(msg=msg, mod=0, puerto_origen=fila[3], ip_origen=ip_publica, sentido=1, protoc=0, port=0) 
-            # else: #Se trata de un paquete ICMP
-            #     self.receive_ip(datapath, packet, ethertype, in_port, msg)
-            # print "TABLA: ", self.tablaNat
-            # print "PUERTO DE ENTRADA: ", in_port
-
-
     #----------------------------------------------------------#
     # Procesar si se trata de una respuesta o una peticion ARP #
     #----------------------------------------------------------#
@@ -232,49 +117,50 @@ class Router(app_manager.RyuApp):
         arp_msg = packet.get_protocol(arp.arp)
 
         if arp_msg.opcode == arp.ARP_REQUEST:
-            if arp_msg.dst_ip == self.ports_to_ips[inPort-1][0]:
-                # e = ethernet.ethernet(dst=etherFrame.src,
-                #                         src=self.ports_to_ips[inPort-1][2],
-                #                         ethertype=ether.ETH_TYPE_ARP)
-                # a = arp.arp(opcode=arp.ARP_REPLY,
-                #             src_mac=self.ports_to_ips[inPort-1][2],
-                #             src_ip=arp_msg.dst_ip,
-                #             dst_mac=etherFrame.src,
-                #             dst_ip=arp_msg.src_ip)
-                # puerto=inPort
-                # p = Packet()
-                # p.add_protocol(e)
-                # p.add_protocol(a)
+            if arp_msg.dst_ip == self.portsToIps[inPort-1][0]:
 
-                arp_pkt = Arp.build_packet(proto=arp_msg, 
+                p = build_arp(proto=arp_msg, 
                                            etherFrame=etherFrame, 
-                                           srcMac=self.ports_to_ips[inPort-1][2])
+                                           srcMac=self.portsToIps[inPort-1][2])
 
-                # self.send_packet(datapath, puerto, p)
-                self.send_packet(datapath, inPort, arp_pkt)
+                self.send_packet(datapath, puerto, p)
         
         elif arp_msg.opcode == arp.ARP_REPLY:
             self.ipToMac[arp_msg.src_ip] = arp_msg.src_mac
-            for (msg,port) in self.dict_pendientes[arp_msg.src_ip]:
-                self.insertar_flujo(msg=msg, mac=arp_msg.src_mac, port=port, mod=1)
-            self.dict_pendientes[arp_msg.src_ip] = []
+            for (msg,port,nat,puertoNat) in self.cachePendientes[arp_msg.src_ip]:
+                if nat == None and puertoNat == None:
+                    self.insertar_flujo(msg=msg, mac=arp_msg.src_mac, port=port, mod=1)
+                elif nat == 1:
+                    self.insertar_flujo(msg=msg, mod=0, puerto_origen=puertoNat, ip_origen=ip_publica, sentido=1, protoc=1, port=port, mac=arp_msg.src_mac)
+            self.cachePendientes[arp_msg.src_ip] = []
 
-    #----------------------------------------------------------------#
-    # Enviar un paquete construido en el controlador hacia el switch #
-    #----------------------------------------------------------------#
-    def send_packet(self, datapath, port, packet):
-        ofproto = datapath.ofproto
-        parser = datapath.ofproto_parser
-        packet.serialize()
-        data = packet.data
-        actions = [parser.OFPActionOutput(port=port)]
-        out = parser.OFPPacketOut(datapath=datapath,
-                  buffer_id=ofproto.OFP_NO_BUFFER,
-                  in_port=ofproto.OFPP_CONTROLLER,
-                  actions=actions,
-                  data=data)
-        datapath.send_msg(out)
 
+    def build_arp(proto=None, etherFrame=None, srcMac=None, srcIp=None, dstIp=None):
+
+	    # Si existe el paquete, es que se esta solicitando una RESPUESTA
+	    if proto
+	        e = ethernet.ethernet(dst=etherFrame.src,
+	                              src=srcMac,
+	                              ethertype=ether.ETH_TYPE_ARP)
+	        a = arp.arp(opcode=arp.ARP_REPLY,
+	                    src_mac=srcMac,
+	                    src_ip=proto.dst_ip,
+	                    dst_mac=etherFrame.src,
+	                    dst_ip=proto.src_ip)
+
+	    # En caso contrario se quiere crear un paquete
+	    else
+	        e = ethernet.ethernet(src=etherFrame.dst, ethertype=ether.ETH_TYPE_ARP)
+	        a = arp.arp(opcode=arp.ARP_REQUEST,
+	                    src_mac=etherFrame.src,
+	                    src_ip=srcIp,
+	                    dst_ip=dstIp)        
+
+	    p = Packet()
+	    p.add_protocol(e)
+	    p.add_protocol(a)
+
+	    return p
 
     #---------------------------------------------------#
     # Función que se usa cuando se recibe un paquete IP #
@@ -284,14 +170,12 @@ class Router(app_manager.RyuApp):
         ipPacket = packet.get_protocol(ipv4.ipv4)
 
         #Si va destinado al router
-        if ipPacket.dst == self.ports_to_ips[0][0]:
+        if ipPacket.dst == self.portsToIps[0][0]:
             if ipPacket.proto == inet.IPPROTO_ICMP:
                 icmpPacket = packet.get_protocol(icmp.icmp)
                 self.check_icmp(datapath, etherFrame, ipPacket, icmpPacket, inPort) #Se usa una función que trata un paquete ICMP 
-                # return 0
             else:
                 send_packet(datapath=datapath,port=inPort,packet=packet) #Se envía el paquete
-                # return 1
         #Si no va destinado al router
         else:
             (next_hop, port) = self.find_in_routingTable(ipPacket.dst) #Almacena el puerto y el siguiente salto
@@ -303,25 +187,13 @@ class Router(app_manager.RyuApp):
                 #self.add_flow(datapath, 0, match, actions)
                 self.insertar_flujo(msg=msg, mac=self.ipToMac[next_hop], port=port, mod=1)
             else: #Si no está dentro de la tabla se construye un paquete ARP para averiguar su MAC
-                # print "---- NEXT_HOP -----", next_hop
-                # e = ethernet.ethernet(src=etherFrame.dst, ethertype=ether.ETH_TYPE_ARP)
-                # a = arp.arp(opcode=arp.ARP_REQUEST,
-                #             src_ip=self.ports_to_ips[port-1][0],
-                #             src_mac=etherFrame.src,
-                #             dst_ip=next_hop)
-                # puerto = etherFrame.src
-                # p = Packet()
-                # p.add_protocol(e)
-                # p.add_protocol(a)
 
-                p = Arp.build_packet(srcIp=self.ports_to_ips[port-1][0], dstIp=next_hop)
+                p = build_arp(srcIp=self.portsToIps[port-1][0], dstIp=next_hop)
 
-                if next_hop not in self.dict_pendientes:
-                    self.dict_pendientes[next_hop] = []
-                self.dict_pendientes[next_hop] = self.dict_pendientes[next_hop] + [(msg, port)]
-                self.send_packet(datapath=datapath, port=port, packet=p)
-
-            #find_mac(self, datapath, etherFrame, msg)        
+                if next_hop not in self.cachePendientes:
+                    self.cachePendientes[next_hop] = []
+                self.cachePendientes[next_hop] = self.cachePendientes[next_hop] + [(msg, port,None,None)]
+                self.send_packet(datapath=datapath, port=port, packet=p)    
 
 
     #Función que se encarga de averiguar si se da respuesta al ping y que mensajes se muestran en el router según el tipo
@@ -359,6 +231,7 @@ class Router(app_manager.RyuApp):
         else:
             buf = "ping ( Unknown reason )"
             self.ping_q.put(buf)
+
     #Función que se encarga de enviar una réplica de icmp
     def reply_icmp(self, datapath, srcMac, dstMac, srcIp, dstIp, ttl, type, id, seq, data, inPort):
 
@@ -368,20 +241,70 @@ class Router(app_manager.RyuApp):
             print('No se ha enviado nada')
 
     def send_icmp(self, datapath, srcMac, srcIp, dstMac, dstIp, outPort, seq, data, id=1, type=8, ttl=64):
-        # e = ethernet.ethernet(dstMac, srcMac, ether.ETH_TYPE_IP) #Construye el protocolo ethernet
-        # iph = ipv4.ipv4(4, 5, 0, 0, 0, 2, 0, ttl, 1, 0, srcIp, dstIp) #Construye la parte del protocolo IP
-        # echo = icmp.echo(id, seq, data) #Construye la parte del echo que se añadirá al protocolo icmp
-        # icmph = icmp.icmp(type, 0, 0, echo) #Construye la parte del icmp
+        e = ethernet.ethernet(dstMac, srcMac, ether.ETH_TYPE_IP) #Construye el protocolo ethernet
+        iph = ipv4.ipv4(4, 5, 0, 0, 0, 2, 0, ttl, 1, 0, srcIp, dstIp) #Construye la parte del protocolo IP
+        echo = icmp.echo(id, seq, data) #Construye la parte del echo que se añadirá al protocolo icmp
+        icmph = icmp.icmp(type, 0, 0, echo) #Construye la parte del icmp
 
-        # p = Packet() #Crea el paquete
-        # p.add_protocol(e) #Añade el protocolo ethernet
-        # p.add_protocol(iph) #Añade el protocolo ip
-        # p.add_protocol(icmph) #Añade el protocolo icmp
-        # p.serialize() #Serializa todo
-
-        p = Icmp.build_packet(srcMac=srcMac, srcIp=srcIp, dstMac=dstMac, dstIp=dstIp, seq=seq, data=data, id=id, type=type, ttl=ttl)
+        p = Packet() #Crea el paquete
+        p.add_protocol(e) #Añade el protocolo ethernet
+        p.add_protocol(iph) #Añade el protocolo ip
+        p.add_protocol(icmph) #Añade el protocolo icmp
+        p.serialize() #Serializa todo
 
         actions = [datapath.ofproto_parser.OFPActionOutput(outPort, 0)] #Enviar por el puerto outPort
         #Mensaje a enviar
         out = datapath.ofproto_parser.OFPPacketOut(datapath=datapath, buffer_id=0xffffffff, in_port=datapath.ofproto.OFPP_CONTROLLER, actions=actions, data=p.data)
-        datapath.send_msg(out) #Enviar mensaje            
+        datapath.send_msg(out) #Enviar mensaje           
+
+
+    #  Inserta una entrada a la tabla de flujo.
+    def add_flow(self, datapath, priority, match, actions, buffer_id=None):
+            ofproto = datapath.ofproto
+            parser = datapath.ofproto_parser
+            inst = [parser.OFPInstructionActions(ofproto.OFPIT_APPLY_ACTIONS,actions)]
+            if buffer_id:
+                mod = parser.OFPFlowMod(datapath=datapath, buffer_id=buffer_id,
+                    priority=priority, match=match,
+                    instructions=inst, idle_timeout=30,command=ofproto.OFPFC_ADD)
+            else:
+                mod = parser.OFPFlowMod(datapath=datapath, priority=priority,
+                    match=match, instructions=inst, idle_timeout=30,command=ofproto.OFPFC_ADD)
+            print "****** SALIDA FINAL: ****** ", mod
+            datapath.send_msg(mod)
+
+    #----------------------------------------------------------------#
+    # Enviar un paquete construido en el controlador hacia el switch #
+    #----------------------------------------------------------------#
+    def send_packet(self, datapath, port, packet):
+        ofproto = datapath.ofproto
+        parser = datapath.ofproto_parser
+        packet.serialize()
+        data = packet.data
+        actions = [parser.OFPActionOutput(port=port)]
+        out = parser.OFPPacketOut(datapath=datapath,
+                  buffer_id=ofproto.OFP_NO_BUFFER,
+                  in_port=ofproto.OFPP_CONTROLLER,
+                  actions=actions,
+                  data=data)
+        datapath.send_msg(out)
+
+
+    def insertar_en_cola(self, ip, puerto, msg, nat=None, puertoNat=None):
+        if ip not in self.cachePendientes:  
+            self.cachePendientes[ip] = []
+        self.cachePendientes[ip] = self.cachePendientes[ip]+[(msg,puerto,nat,puertoNat)]
+
+
+    def enviar_arp(self, mac_origen, port, next_hop, datapath, msg, nat=None, puertoNat=None):
+        e = ethernet.ethernet(src=mac_origen, ethertype=ether.ETH_TYPE_ARP)
+        a = arp.arp(opcode=arp.ARP_REQUEST,
+            src_ip=self.portsToIps[port-1][0],
+            src_mac=mac_origen,
+            dst_ip=next_hop)
+        #puerto = mac_origen
+        p = Packet()
+        p.add_protocol(e)
+        p.add_protocol(a)
+        self.insertar_en_cola(ip=next_hop, puerto=port, msg=msg, nat=nat, puertoNat=puertoNat)
+        self.send_packet(datapath=datapath, port=port, packet=p)        
