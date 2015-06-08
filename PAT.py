@@ -31,16 +31,10 @@ ip_publica = '10.0.0.69'
 
 class SimpleRouter(app_manager.RyuApp):
     OFP_VERSIONS = [ofproto_v1_3.OFP_VERSION]
-    # mac_to_port=dict()
+
     def __init__(self, *args, **kwargs):
         super(SimpleRouter, self).__init__(*args, **kwargs)
-        self.ping_q = hub.Queue()
-        self.portInfo = {}
-        self.arpInfo = {}
-        self.routingInfo = {}
-        self.mplsInfo = {}
-
-        self.mac_to_port=dict()
+        self.ping_q = hub.Queue() #Variable que se utilizará para los mensajes de PING
 
         self.ipToMac = dict()
         
@@ -50,8 +44,7 @@ class SimpleRouter(app_manager.RyuApp):
         self.tablaEnrutamiento = [('10.0.0.0','255.255.255.0',1,None),
                                   ('10.0.1.0','255.255.255.0',2,None)]
 
-        #[ip_privada(src), puerto_privado(src_port), ip_publica(dst), puerto_publico(dst_port), mac_origen]
-        self.tablaNat = []
+        self.tablaNat = []#[ip_privada(src), puerto_privado(src_port), ip_publica(dst), puerto_publico(dst_port)]
 
         self.dict_pendientes = dict()
 
@@ -64,7 +57,6 @@ class SimpleRouter(app_manager.RyuApp):
                     ruta_sel[0] = IPNetwork(ruta[0],ruta[1])    #Network
                     ruta_sel[1] = ruta[2]                       #Puerto
                     ruta_sel[2] = ruta[3]                       #Gateway
-                    # print "ruta sel: ", ruta_sel
         if ruta_sel[2] == None:
             return (dstIp, ruta_sel[1])
         else:
@@ -77,22 +69,18 @@ class SimpleRouter(app_manager.RyuApp):
         ofproto = datapath.ofproto
         in_port = msg.match['in_port']
         
-
         packet = Packet(msg.data)
         eth = packet.get_protocol(ethernet.ethernet)
         ethertype = packet.get_protocol(ethernet.ethernet)
         src=eth.src
         dst=eth.dst
 
-        self.mac_to_port[src] = in_port
         used_ports = []
 
         if eth.ethertype==ether.ETH_TYPE_ARP: #Si se trata de un paquete ARP
             self.receive_arp(datapath, packet, ethertype, in_port)
 
         elif eth.ethertype==ether.ETH_TYPE_IP: #Si se trata de un paquete IP
-
-            print "PAQUETE AL LLEGAR: ", packet
             ip_port = packet.get_protocol(ipv4.ipv4)
             try: #Intenta almacenar un paquete del tipo TCP
                 tcp_port = packet.get_protocol(tcp.tcp)
@@ -118,34 +106,21 @@ class SimpleRouter(app_manager.RyuApp):
                         if tcp_port.dst_port == em[3]:
                             esta_en_tabla = True
                             fila = em
-
                 if esta_en_tabla == False: #Si no está en la tabla
                     #Se crea un puerto aleatorio.
                     nuevo_puerto = random.randint(5000,5010)
                     while nuevo_puerto in used_ports:
                         nuevo_puerto = random.randint(5000,5010)
-                    print "PUERTO A INSERTAR: ", nuevo_puerto
                     used_ports.append(nuevo_puerto)
                     #Se añade a la tabla de nat
                     self.tablaNat.append([ip_port.src,tcp_port.src_port,ip_publica,nuevo_puerto,src])
                     #Se cambian las propiedades del paquete
-
-
-                    #AQUÍ SE METE ARP:
-
-
                     self.insertar_flujo(msg=msg, mod=0, puerto_origen=nuevo_puerto, ip_origen=ip_publica, sentido=1, protoc=1, port=0) #Pasarle una MAC
-
                 else: #Si está en la tabla
                     #Se cambian las propiedades del paquete
                     if red_privada == False: #Proviene de la red pública
                         self.insertar_flujo(msg=msg, mod=0, puerto_destino=fila[1], ip_destino=fila[0], sentido=0, protoc=1, port=0, mac=fila[4])
                     if red_privada == True: #Proviene de la red privada
-
-
-                        #AQUÍ SE METE ARP:
-
-
                         self.insertar_flujo(msg=msg, mod=0, puerto_origen=fila[3], ip_origen=ip_publica, sentido=1, protoc=1, port=0) #Pasarle una MAC
             elif udp_port: #Se trata de un paquete UDP
                 #ALMACENAR LA INFORMACIÓN EN LA TABLA:
@@ -163,41 +138,23 @@ class SimpleRouter(app_manager.RyuApp):
                         if udp_port.dst_port == em[3]:
                             esta_en_tabla = True
                             fila = em
-
                 if esta_en_tabla == False: #Si no está en la tabla
                     #Se añade a la tabla de nat
-
                     nuevo_puerto = random.randint(5000,5010)
                     while nuevo_puerto in used_ports:
                         nuevo_puerto = random.randint(5000,5010)
-                    print "PUERTO A INSERTAR: ", nuevo_puerto
                     used_ports.append(nuevo_puerto)
-
                     self.tablaNat.append([ip_port.src,udp_port.src_port,ip_publica,nuevo_puerto,src])
-
                     (next_hop, port) = self.find_in_routingTable(ipPacket.dst) #Almacena el puerto y el siguiente salto
-                    
-
-                    #AQUÍ SE METEN COSAS:
-
-
                     self.insertar_flujo(msg=msg, mod=0, puerto_origen=nuevo_puerto, ip_origen=ip_publica, sentido=1, protoc=0, port=0) #Pasarle una MAC
-
                 else: #Si está en la tabla
                     #Se cambian las propiedades del paquete
                     if red_privada == False: #Proviene de la red pública
                         self.insertar_flujo(msg=msg, mod=0, puerto_destino=fila[1], ip_destino=fila[0], sentido=0, protoc=0, port=0, mac=fila[4]) #Pasarle una MAC
                     if red_privada == True: #Proviene de la red privada
-                    
-
-                        #AQUÍ SE METE ARP:
-
-
                         self.insertar_flujo(msg=msg, mod=0, puerto_origen=fila[3], ip_origen=ip_publica, sentido=1, protoc=0, port=0) 
-            else: #Se trata de un paquete ICMP
+            else: #Se trata de otro tipo de paquete IP
                 self.receive_ip(datapath, packet, ethertype, in_port, msg)
-            print "TABLA: ", self.tablaNat
-            print "PUERTO DE ENTRADA: ", in_port
 
     #  Inserta una entrada a la tabla de flujo.
     def add_flow(self, datapath, priority, match, actions, buffer_id=None):
@@ -211,7 +168,6 @@ class SimpleRouter(app_manager.RyuApp):
             else:
                 mod = parser.OFPFlowMod(datapath=datapath, priority=priority,
                     match=match, instructions=inst, idle_timeout=30,command=ofproto.OFPFC_ADD)
-            print "****** SALIDA FINAL: ****** ", mod
             datapath.send_msg(mod)
 
     # Enviar un paquete construido en el controlador hacia el switch
@@ -229,7 +185,6 @@ class SimpleRouter(app_manager.RyuApp):
         datapath.send_msg(out)
 
     def insertar_flujo(self, msg, mac=None, port=1, mod=1, protoc=1, puerto_origen=None, puerto_destino=None, ip_origen=None, ip_destino=None,sentido=1):
-        
         datapath = msg.datapath
         pckt = packet.Packet(msg.data)
         ipPacket = pckt.get_protocol(ipv4.ipv4)
@@ -243,7 +198,6 @@ class SimpleRouter(app_manager.RyuApp):
                 ]
         elif mod == 0: # TCP/UDP
             if sentido == 0: #Proviene de la red pública
-                print "PROVIENE DE LA RED PÚBLICA"
                 if protoc==1: #TCP
                     match = datapath.ofproto_parser.OFPMatch(eth_src=self.ports_to_ips[0][2], eth_dst=mac, eth_type=ether.ETH_TYPE_IP, ip_proto=inet.IPPROTO_TCP)
                     actions = [
@@ -253,8 +207,6 @@ class SimpleRouter(app_manager.RyuApp):
                         datapath.ofproto_parser.OFPActionSetField(eth_dst=mac),
                         datapath.ofproto_parser.OFPActionOutput(port)
                         ]
-                    print " - Se ha modificado el puerto de origen por: ", puerto_origen
-                    print " - Se ha modificado la ip de origen por:", ip_origen
                 elif protoc==0: #UPD
                     match = datapath.ofproto_parser.OFPMatch(eth_src=self.ports_to_ips[0][2], eth_dst=mac, eth_type=ether.ETH_TYPE_IP, ip_proto=inet.IPPROTO_UDP)
                     actions = [
