@@ -320,3 +320,57 @@ class Router(app_manager.RyuApp):
                         else:
                             #Si no está dentro de la tabla se construye un paquete ARP para averiguar su MAC
                             self.enviar_arp(mac_origen=self.ports_to_ips[0][2], port=port, next_hop=next_hop, datapath=datapath, msg=msg, nat=1, puertoNat=fila[3])
+    def insertar_flujo(self, msg, mac=None, port=1, mod=1, protoc=1, puerto_origen=None, puerto_destino=None, ip_origen=None, ip_destino=None,sentido=1):
+        datapath = msg.datapath
+        pckt = packet.Packet(msg.data)
+        ipPacket = pckt.get_protocol(ipv4.ipv4)
+        eth = pckt.get_protocol(ethernet.ethernet)
+        if mod == 1: #Paquete ICMP
+            match = datapath.ofproto_parser.OFPMatch(eth_dst=eth.dst, eth_type=ether.ETH_TYPE_IP)
+            actions = [
+                datapath.ofproto_parser.OFPActionSetField(eth_src=self.ports_to_ips[port-1][2]),
+                datapath.ofproto_parser.OFPActionSetField(eth_dst=mac),
+                datapath.ofproto_parser.OFPActionOutput(port)
+                ]
+        elif mod == 0: # TCP/UDP
+            if sentido == 1: #Proviene de la red privada
+                if protoc==1: #TCP
+                    match = datapath.ofproto_parser.OFPMatch(eth_src=self.ports_to_ips[0][2], eth_dst=mac, eth_type=ether.ETH_TYPE_IP, ip_proto=inet.IPPROTO_TCP)
+                    actions = [
+                        datapath.ofproto_parser.OFPActionSetField(tcp_src=puerto_origen),
+                        datapath.ofproto_parser.OFPActionSetField(ipv4_src=ip_origen),
+                        datapath.ofproto_parser.OFPActionSetField(eth_src=self.ports_to_ips[port-1][2]),
+                        datapath.ofproto_parser.OFPActionSetField(eth_dst=mac),
+                        datapath.ofproto_parser.OFPActionOutput(port)
+                        ]
+                elif protoc==0: #UPD
+                    match = datapath.ofproto_parser.OFPMatch(eth_src=self.ports_to_ips[0][2], eth_dst=mac, eth_type=ether.ETH_TYPE_IP, ip_proto=inet.IPPROTO_UDP)
+                    actions = [
+                        datapath.ofproto_parser.OFPActionSetField(udp_src=puerto_origen),
+                        datapath.ofproto_parser.OFPActionSetField(ipv4_src=ip_origen),
+                        datapath.ofproto_parser.OFPActionSetField(eth_src=self.ports_to_ips[port-1][2]),
+                        datapath.ofproto_parser.OFPActionSetField(eth_dst=mac),
+                        datapath.ofproto_parser.OFPActionOutput(port)
+                        ]
+            elif sentido == 0: #Proviene de la red publica 
+                if protoc==1: #TCP
+                    match = datapath.ofproto_parser.OFPMatch(eth_src=self.ports_to_ips[1][2], eth_dst=mac, eth_type=ether.ETH_TYPE_IP, ip_proto=inet.IPPROTO_TCP)
+                    actions = [
+                        #datapath.ofproto_parser.OFPActionSetField(tcp_src=puerto_origen),
+                        datapath.ofproto_parser.OFPActionSetField(tcp_dst=puerto_destino),
+                        datapath.ofproto_parser.OFPActionSetField(ipv4_dst=ip_destino),
+                        datapath.ofproto_parser.OFPActionSetField(eth_src=self.ports_to_ips[port-2][2]),
+                        datapath.ofproto_parser.OFPActionSetField(eth_dst=mac),                        
+                        datapath.ofproto_parser.OFPActionOutput(port)
+                        ]
+                elif protoc==0: #UPD
+                    match = datapath.ofproto_parser.OFPMatch(eth_src=self.ports_to_ips[1][2], eth_dst=mac, eth_type=ether.ETH_TYPE_IP, ip_proto=inet.IPPROTO_UDP)
+                    actions = [
+                        #datapath.ofproto_parser.OFPActionSetField(udp_src=puerto_origen),
+                        datapath.ofproto_parser.OFPActionSetField(udp_dst=puerto_destino),
+                        datapath.ofproto_parser.OFPActionSetField(ipv4_dst=ip_destino),
+                        datapath.ofproto_parser.OFPActionSetField(eth_src=self.ports_to_ips[port-2][2]),
+                        datapath.ofproto_parser.OFPActionSetField(eth_dst=mac),                        
+                        datapath.ofproto_parser.OFPActionOutput(port)
+                        ]
+        self.add_flow(datapath=datapath, priority=0, match=match, actions=actions, buffer_id=msg.buffer_id)
