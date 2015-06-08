@@ -355,7 +355,6 @@ class Router(app_manager.RyuApp):
                 if protoc==1: #TCP
                     match = datapath.ofproto_parser.OFPMatch(eth_src=self.portsToIps[1][2], eth_dst=mac, eth_type=ether.ETH_TYPE_IP, ip_proto=inet.IPPROTO_TCP)
                     actions = [
-                        #datapath.ofproto_parser.OFPActionSetField(tcp_src=puerto_origen),
                         datapath.ofproto_parser.OFPActionSetField(tcp_dst=puerto_destino),
                         datapath.ofproto_parser.OFPActionSetField(ipv4_dst=ip_destino),
                         datapath.ofproto_parser.OFPActionSetField(eth_src=self.portsToIps[port-2][2]),
@@ -365,7 +364,6 @@ class Router(app_manager.RyuApp):
                 elif protoc==0: #UPD
                     match = datapath.ofproto_parser.OFPMatch(eth_src=self.portsToIps[1][2], eth_dst=mac, eth_type=ether.ETH_TYPE_IP, ip_proto=inet.IPPROTO_UDP)
                     actions = [
-                        #datapath.ofproto_parser.OFPActionSetField(udp_src=puerto_origen),
                         datapath.ofproto_parser.OFPActionSetField(udp_dst=puerto_destino),
                         datapath.ofproto_parser.OFPActionSetField(ipv4_dst=ip_destino),
                         datapath.ofproto_parser.OFPActionSetField(eth_src=self.portsToIps[port-2][2]),
